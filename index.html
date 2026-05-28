@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -40,37 +40,57 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE HOTDOG</div>
+  <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE TONGUE</div>
 
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
     const hint = document.getElementById("hint");
 
-    // Save these image files in the same GitHub folder as index.html:
-    // troll.png
-    // beachball.png
-    // pearlsmile.gif
+    /*
+      REQUIRED FILES IN YOUR GITHUB REPO ROOT:
+      index.html
+      troll.png
+      beachball.png
+      troll1.png
+      troll2.png
+      tonguebar.png
+
+      GLOBAL LEADERBOARD:
+      This works locally with localStorage immediately.
+      For a true global leaderboard, create a Firebase Realtime Database
+      and paste the database URL below, for example:
+      const FIREBASE_DB_URL = "https://your-project-default-rtdb.firebaseio.com";
+    */
+    const FIREBASE_DB_URL = "";
+
     const trollImg = new Image();
     trollImg.src = "troll.png";
 
     const beachBallImg = new Image();
     beachBallImg.src = "beachball.png";
 
-    const pearlImg = new Image();
-    pearlImg.src = "pearlsmile.gif";
+    const trollTargetIdleImg = new Image();
+    trollTargetIdleImg.src = "troll1.png";
+
+    const trollTargetHitImg = new Image();
+    trollTargetHitImg.src = "troll2.png";
+
+    const tongueImg = new Image();
+    tongueImg.src = "tonguebar.png";
 
     let W = window.innerWidth || 390;
     let H = window.innerHeight || 700;
     let dpr = 1;
 
     let balls = [];
-    let pearlTargets = [];
-    let pearlPieces = [];
+    let targets = [];
+    let targetPieces = [];
     let popTexts = [];
     let poops = [];
     let smokePuffs = [];
     let trollHeads = [];
+    let leaderboard = [];
 
     const keys = { left: false, right: false };
 
@@ -79,14 +99,15 @@
       best: 0,
       running: true,
       gameOver: false,
+      scoreSubmitted: false,
       lastTime: performance.now(),
       gravity: 1320,
 
       nextBallScore: 5,
-      nextPearlScore: 30,
-      nextPearlSpawnTimer: 0,
+      nextTargetScore: 30,
+      nextTargetSpawnTimer: 0,
 
-      pearlStreak: 0,
+      targetStreak: 0,
       message: "",
       messageTimer: 0,
 
@@ -118,8 +139,8 @@
     const paddle = {
       x: W / 2,
       y: H * .83,
-      w: 240,
-      h: 24,
+      w: 260,
+      h: 46,
       velocity: 0,
       acceleration: 4300,
       maxSpeed: 1420,
@@ -136,10 +157,8 @@
     }
 
     function currentBallRadius() {
-      // Ball starts 2x size and shrinks to normal by score 20.
       const progress = clamp(state.score / 20, 0, 1);
-      const scale = 2 - progress;
-      return baseBallRadius() * scale;
+      return baseBallRadius() * (2 - progress);
     }
 
     function sizeCanvas() {
@@ -153,9 +172,9 @@
       canvas.style.height = H + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const baseWidth = Math.max(145, Math.min(270, W * .24));
+      const baseWidth = Math.max(180, Math.min(340, W * .30));
       paddle.w = state.did50Shrink ? baseWidth * (2 / 3) : baseWidth;
-      paddle.h = Math.max(20, Math.min(30, H * .026));
+      paddle.h = paddle.w * .25;
       paddle.y = H * .83;
       paddle.x = clamp(paddle.x || W / 2, paddle.w / 2, W - paddle.w / 2);
 
@@ -167,7 +186,6 @@
 
     function createBall(x = W / 2, y = H * .25) {
       const direction = Math.random() > .5 ? 1 : -1;
-
       return {
         x,
         y,
@@ -179,24 +197,26 @@
       };
     }
 
-    function createPearlTarget() {
-      const size = 54 + Math.random() * 72;
+    function createTarget() {
+      const size = 60 + Math.random() * 90;
       const x = 90 + Math.random() * Math.max(1, W - 180);
       const topLimit = H * .52;
       const y = 80 + Math.random() * Math.max(80, topLimit - 160);
 
-      pearlTargets.push({
+      targets.push({
         x, y,
         baseX: x,
         baseY: y,
         size,
-        rotation: (Math.random() - .5) * .3,
-        rotationSpeed: (Math.random() > .5 ? 1 : -1) * (.35 + Math.random() * .9),
-        driftX: (Math.random() > .5 ? 1 : -1) * (50 + Math.random() * 90),
-        driftY: (Math.random() > .5 ? 1 : -1) * (24 + Math.random() * 58),
-        speedX: .75 + Math.random() * .85,
-        speedY: .65 + Math.random() * .75,
+        rotation: (Math.random() - .5) * .25,
+        rotationSpeed: (Math.random() > .5 ? 1 : -1) * (.16 + Math.random() * .28),
+        driftX: (Math.random() > .5 ? 1 : -1) * (45 + Math.random() * 85),
+        driftY: (Math.random() > .5 ? 1 : -1) * (22 + Math.random() * 48),
+        speedX: .7 + Math.random() * .75,
+        speedY: .6 + Math.random() * .7,
         pulse: Math.random() * Math.PI * 2,
+        status: "idle",
+        hitTimer: 0,
         broken: false
       });
     }
@@ -205,12 +225,13 @@
       state.score = 0;
       state.running = true;
       state.gameOver = false;
+      state.scoreSubmitted = false;
 
       state.nextBallScore = 5;
-      state.nextPearlScore = 30;
-      state.nextPearlSpawnTimer = 0;
+      state.nextTargetScore = 30;
+      state.nextTargetSpawnTimer = 0;
 
-      state.pearlStreak = 0;
+      state.targetStreak = 0;
       state.message = "";
       state.messageTimer = 0;
 
@@ -232,23 +253,21 @@
       paddle.targetX = null;
 
       balls = [createBall(W / 2, H * .25)];
-      pearlTargets = [];
-      pearlPieces = [];
+      targets = [];
+      targetPieces = [];
       popTexts = [];
       poops = [];
       smokePuffs = [];
       trollHeads = [];
 
       sizeCanvas();
-      hint.textContent = "USE ARROW KEYS OR DRAG TO CONTROL THE HOTDOG";
+      hint.textContent = "USE ARROW KEYS OR DRAG TO CONTROL THE TONGUE";
     }
 
     function addBall() {
       const x = clamp(paddle.x + (Math.random() - .5) * paddle.w, 70, W - 70);
       const y = Math.max(80, paddle.y - 220 - Math.random() * 130);
-
       balls.push(createBall(x, y));
-
       state.message = "+ BALL";
       state.messageTimer = .7;
     }
@@ -261,7 +280,6 @@
 
     function triggerPoopRain() {
       state.did35Poops = true;
-
       for (let i = 0; i < 24; i++) {
         poops.push({
           x: Math.random() * W,
@@ -278,7 +296,6 @@
     function spawnTrollFlood() {
       for (let i = 0; i < 55; i++) {
         const size = 22 + Math.random() * 42;
-
         trollHeads.push({
           x: Math.random() * W,
           y: -size - Math.random() * 1300,
@@ -302,6 +319,7 @@
         state.did50Shrink = true;
         state.fireMode = true;
         paddle.w *= 2 / 3;
+        paddle.h = paddle.w * .25;
         state.message = "FIRE MODE";
         state.messageTimer = 1.2;
       }
@@ -331,9 +349,9 @@
         state.nextBallScore += 5;
       }
 
-      if (state.score >= state.nextPearlScore) {
-        state.nextPearlSpawnTimer = 0;
-        state.nextPearlScore += 3;
+      if (state.score >= state.nextTargetScore) {
+        state.nextTargetSpawnTimer = 0;
+        state.nextTargetScore += 3;
       }
 
       checkMilestones();
@@ -366,97 +384,112 @@
       }
     }
 
-    function updatePearlTargets(dt) {
-      if (state.score >= 30 && pearlTargets.length < 1 && state.running) {
-        state.nextPearlSpawnTimer -= dt;
-
-        if (state.nextPearlSpawnTimer <= 0) {
-          createPearlTarget();
-          state.nextPearlSpawnTimer = 1.2 + Math.random() * 1.8;
+    function updateTargets(dt) {
+      if (state.score >= 30 && targets.length < 1 && state.running) {
+        state.nextTargetSpawnTimer -= dt;
+        if (state.nextTargetSpawnTimer <= 0) {
+          createTarget();
+          state.nextTargetSpawnTimer = 1.2 + Math.random() * 1.8;
         }
       }
 
-      for (const target of pearlTargets) {
+      for (const target of targets) {
         target.pulse += dt;
         target.x = target.baseX + Math.sin(target.pulse * target.speedX) * target.driftX;
         target.y = target.baseY + Math.cos(target.pulse * target.speedY) * target.driftY;
         target.rotation += target.rotationSpeed * dt;
+
+        if (target.status === "hit") {
+          target.hitTimer -= dt;
+          if (target.hitTimer <= 0) shatterTarget(target);
+        }
       }
 
-      pearlTargets = pearlTargets.filter(target => !target.broken);
+      targets = targets.filter(target => !target.broken);
     }
 
-    function updatePearlPieces(dt) {
-      for (const piece of pearlPieces) {
+    function updateTargetPieces(dt) {
+      for (const piece of targetPieces) {
         piece.vy += 980 * dt;
         piece.x += piece.vx * dt;
         piece.y += piece.vy * dt;
         piece.rotation += piece.rotationSpeed * dt;
-        piece.alpha -= dt * .18;
+        piece.alpha -= dt * .16;
       }
 
-      pearlPieces = pearlPieces.filter(piece => piece.alpha > 0 && piece.y < H + 180);
+      targetPieces = targetPieces.filter(piece => piece.alpha > 0 && piece.y < H + 180);
     }
 
-    function breakPearlTarget(target) {
-      if (target.broken) return;
-      target.broken = true;
+    function hitTarget(target) {
+      if (target.status !== "idle") return;
 
-      const grid = 4;
-      const pieceSize = target.size / grid;
+      target.status = "hit";
+      target.hitTimer = 1.0;
+      target.rotationSpeed *= 0.2;
 
-      for (let row = 0; row < grid; row++) {
-        for (let col = 0; col < grid; col++) {
-          const localX = (col - (grid - 1) / 2) * pieceSize;
-          const localY = (row - (grid - 1) / 2) * pieceSize;
-
-          const angle = target.rotation;
-          const worldX = target.x + localX * Math.cos(angle) - localY * Math.sin(angle);
-          const worldY = target.y + localX * Math.sin(angle) + localY * Math.cos(angle);
-
-          pearlPieces.push({
-            x: worldX,
-            y: worldY,
-            sx: col / grid,
-            sy: row / grid,
-            sw: 1 / grid,
-            sh: 1 / grid,
-            size: pieceSize,
-            vx: (col - 1.5) * 85 + (Math.random() - .5) * 160,
-            vy: -190 + row * 35 + Math.random() * 110,
-            rotation: target.rotation + (Math.random() - .5) * .8,
-            rotationSpeed: (Math.random() - .5) * 5,
-            alpha: 1
-          });
-        }
-      }
-
-      state.pearlStreak += 1;
+      state.targetStreak += 1;
       addScore(1);
 
       popTexts.push({
-        text: "CRACK!",
+        text: "HIT!",
         x: target.x,
         y: target.y,
         vy: -42,
-        life: .7,
+        life: .75,
         alpha: 1
       });
 
-      if (state.pearlStreak >= 3) {
+      if (state.targetStreak >= 3) {
         state.streakWowTimer = 1.25;
-        state.pearlStreak = 0;
+        state.targetStreak = 0;
       }
     }
 
-    function touchPearlTarget(ball, target) {
+    function shatterTarget(target) {
+      if (target.broken) return;
+      target.broken = true;
+
+      const img = trollTargetHitImg;
+      const gridX = 4;
+      const gridY = 4;
+      const targetW = target.size * 1.2;
+      const targetH = target.size;
+
+      for (let row = 0; row < gridY; row++) {
+        for (let col = 0; col < gridX; col++) {
+          const localX = (col - (gridX - 1) / 2) * (targetW / gridX);
+          const localY = (row - (gridY - 1) / 2) * (targetH / gridY);
+
+          const a = target.rotation;
+          const worldX = target.x + localX * Math.cos(a) - localY * Math.sin(a);
+          const worldY = target.y + localX * Math.sin(a) + localY * Math.cos(a);
+
+          targetPieces.push({
+            x: worldX,
+            y: worldY,
+            sx: col / gridX,
+            sy: row / gridY,
+            sw: 1 / gridX,
+            sh: 1 / gridY,
+            w: targetW / gridX,
+            h: targetH / gridY,
+            vx: (col - (gridX - 1) / 2) * 85 + (Math.random() - .5) * 170,
+            vy: -210 + row * 45 + Math.random() * 120,
+            rotation: target.rotation + (Math.random() - .5) * .9,
+            rotationSpeed: (Math.random() - .5) * 5.5,
+            alpha: 1,
+            img
+          });
+        }
+      }
+    }
+
+    function touchTarget(ball, target) {
+      if (target.status !== "idle") return;
       const dx = ball.x - target.x;
       const dy = ball.y - target.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < target.size * .58 + ball.r) {
-        breakPearlTarget(target);
-      }
+      if (distance < target.size * .58 + ball.r) hitTarget(target);
     }
 
     function updateSmoke(dt) {
@@ -562,7 +595,7 @@
         ball.vy = Math.abs(ball.vy) * .72;
       }
 
-      for (const target of pearlTargets) touchPearlTarget(ball, target);
+      for (const target of targets) touchTarget(ball, target);
 
       const paddleTop = paddle.y - paddle.h / 2;
       const paddleLeft = paddle.x - paddle.w / 2;
@@ -570,10 +603,10 @@
       const ballBottom = ball.y + ball.r;
 
       const movingDown = ball.vy > 0;
-      const crossingHotdog = ballBottom >= paddleTop && ballBottom <= paddleTop + 42;
-      const touchingHotdog = ball.x >= paddleLeft - ball.r * .25 && ball.x <= paddleRight + ball.r * .25;
+      const crossingTongue = ballBottom >= paddleTop && ballBottom <= paddleTop + 42;
+      const touchingTongue = ball.x >= paddleLeft - ball.r * .25 && ball.x <= paddleRight + ball.r * .25;
 
-      if (movingDown && crossingHotdog && touchingHotdog) {
+      if (movingDown && crossingTongue && touchingTongue) {
         const hitPosition = (ball.x - paddle.x) / (paddle.w / 2);
         const randomBounce = 760 + Math.random() * 520;
         const carryBounce = Math.abs(ball.vy) * (.78 + Math.random() * .28);
@@ -584,7 +617,7 @@
         ball.vx = clamp(ball.vx, -900, 900);
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
 
-        state.pearlStreak = 0;
+        state.targetStreak = 0;
         addScore(1);
       }
     }
@@ -598,17 +631,18 @@
       hint.textContent = "TAP OR SPACE TO RESTART";
 
       spawnTrollFlood();
+      askForScoreSubmit();
     }
 
     function update(dt) {
       updatePoops(dt);
       updateTrollHeads(dt);
       updateSmoke(dt);
-      updatePearlPieces(dt);
+      updateTargetPieces(dt);
 
       if (state.running) {
         updatePaddle(dt);
-        updatePearlTargets(dt);
+        updateTargets(dt);
 
         for (const ball of balls) updateBall(ball, dt);
 
@@ -638,6 +672,65 @@
       popTexts = popTexts.filter(pop => pop.life > 0);
     }
 
+    async function loadLeaderboard() {
+      try {
+        if (FIREBASE_DB_URL) {
+          const res = await fetch(`${FIREBASE_DB_URL}/scores.json`);
+          const data = await res.json();
+          const scores = data ? Object.values(data) : [];
+          leaderboard = scores
+            .filter(item => item && item.initials && Number.isFinite(Number(item.score)))
+            .sort((a, b) => Number(b.score) - Number(a.score))
+            .slice(0, 5);
+        } else {
+          leaderboard = JSON.parse(localStorage.getItem("localLeaderboard") || "[]")
+            .sort((a, b) => Number(b.score) - Number(a.score))
+            .slice(0, 5);
+        }
+      } catch (e) {
+        leaderboard = [];
+      }
+    }
+
+    async function submitLeaderboardScore(initials, score) {
+      const entry = {
+        initials: initials.toUpperCase().slice(0, 3),
+        score: Number(score),
+        createdAt: Date.now()
+      };
+
+      try {
+        if (FIREBASE_DB_URL) {
+          await fetch(`${FIREBASE_DB_URL}/scores.json`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(entry)
+          });
+        } else {
+          const local = JSON.parse(localStorage.getItem("localLeaderboard") || "[]");
+          local.push(entry);
+          localStorage.setItem("localLeaderboard", JSON.stringify(local));
+        }
+      } catch (e) {}
+
+      await loadLeaderboard();
+    }
+
+    function askForScoreSubmit() {
+      if (state.scoreSubmitted || state.score <= 0) return;
+      state.scoreSubmitted = true;
+
+      setTimeout(() => {
+        const raw = prompt(`Score: ${state.score}\\nEnter 3 initials for the leaderboard:`, "AAA");
+        if (!raw) return;
+
+        const initials = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
+        if (initials.length < 1) return;
+
+        submitLeaderboardScore(initials.padEnd(3, "X"), state.score);
+      }, 350);
+    }
+
     function drawBackgroundTroll() {
       if (!(trollImg.complete && trollImg.naturalWidth > 0)) return;
 
@@ -657,7 +750,6 @@
       const y = 14;
 
       ctx.save();
-
       ctx.textAlign = "right";
       ctx.textBaseline = "top";
       ctx.font = "bold 16px monospace";
@@ -680,6 +772,39 @@
       ctx.textAlign = "center";
       ctx.fillText("VISITS", x - boxW / 2, y + boxH + 3);
 
+      drawLeaderboard(x - boxW, y + boxH + 18, boxW);
+
+      ctx.restore();
+    }
+
+    function drawLeaderboard(x, y, width) {
+      ctx.save();
+
+      ctx.fillStyle = "rgba(0,0,0,.82)";
+      ctx.fillRect(x, y, width, 92);
+
+      ctx.strokeStyle = "#aaa";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, width, 92);
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = "bold 9px monospace";
+      ctx.fillStyle = "#9cff7c";
+      ctx.fillText("TOP 5", x + width / 2, y + 5);
+
+      ctx.textAlign = "left";
+      ctx.font = "bold 10px monospace";
+
+      for (let i = 0; i < 5; i++) {
+        const entry = leaderboard[i];
+        const label = entry
+          ? `${i + 1}.${entry.initials} ${String(entry.score).padStart(3, "0")}`
+          : `${i + 1}.--- ---`;
+
+        ctx.fillText(label, x + 8, y + 20 + i * 13);
+      }
+
       ctx.restore();
     }
 
@@ -689,7 +814,6 @@
       const bestColor = `hsla(${(hue + 35) % 360}, 78%, 45%, .42)`;
 
       ctx.save();
-
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
@@ -708,7 +832,6 @@
       const size = ball.r * 2;
 
       ctx.save();
-
       ctx.translate(ball.x, ball.y);
       ctx.rotate(ball.spin);
 
@@ -762,7 +885,6 @@
         : .75 + Math.sin(time * 2.3) * .12;
 
       ctx.save();
-
       ctx.translate(ball.x, ball.y);
       ctx.globalCompositeOperation = "lighter";
 
@@ -792,32 +914,32 @@
         const rr = ball.r * 1.05 + wobble;
         const px = Math.cos(a) * rr;
         const py = Math.sin(a) * rr;
-
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
 
       ctx.closePath();
       ctx.stroke();
-
       ctx.restore();
     }
 
-    function drawPearlTarget(target) {
-      const size = target.size;
+    function drawTarget(target) {
+      const img = target.status === "hit" ? trollTargetHitImg : trollTargetIdleImg;
+      const w = target.size * 1.2;
+      const h = target.size;
 
       ctx.save();
       ctx.translate(target.x, target.y);
       ctx.rotate(target.rotation);
 
-      if (pearlImg.complete && pearlImg.naturalWidth > 0) {
-        ctx.drawImage(pearlImg, -size / 2, -size / 2, size, size);
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
       } else {
         ctx.fillStyle = "#eee";
         ctx.strokeStyle = "#111";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       }
@@ -825,54 +947,41 @@
       ctx.restore();
     }
 
-    function drawPearlPieces() {
-      for (const piece of pearlPieces) {
+    function drawTargetPieces() {
+      for (const piece of targetPieces) {
         ctx.save();
         ctx.globalAlpha = piece.alpha;
         ctx.translate(piece.x, piece.y);
         ctx.rotate(piece.rotation);
 
-        if (pearlImg.complete && pearlImg.naturalWidth > 0) {
-          const sourceW = pearlImg.naturalWidth * piece.sw;
-          const sourceH = pearlImg.naturalHeight * piece.sh;
-          const sourceX = pearlImg.naturalWidth * piece.sx;
-          const sourceY = pearlImg.naturalHeight * piece.sy;
+        const img = piece.img;
+        if (img.complete && img.naturalWidth > 0) {
+          const sourceW = img.naturalWidth * piece.sw;
+          const sourceH = img.naturalHeight * piece.sh;
+          const sourceX = img.naturalWidth * piece.sx;
+          const sourceY = img.naturalHeight * piece.sy;
 
           ctx.drawImage(
-            pearlImg,
+            img,
             sourceX,
             sourceY,
             sourceW,
             sourceH,
-            -piece.size / 2,
-            -piece.size / 2,
-            piece.size,
-            piece.size
+            -piece.w / 2,
+            -piece.h / 2,
+            piece.w,
+            piece.h
           );
         } else {
           ctx.fillStyle = "#ddd";
-          ctx.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size);
+          ctx.fillRect(-piece.w / 2, -piece.h / 2, piece.w, piece.h);
         }
 
         ctx.restore();
       }
     }
 
-    function roundRect(x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
-    }
-
-    function drawHotdog() {
+    function drawTongueBar() {
       const x = paddle.x;
       const y = paddle.y;
       const w = paddle.w;
@@ -881,42 +990,12 @@
       ctx.save();
       ctx.translate(x, y);
 
-      // bun
-      ctx.fillStyle = "#d79b4b";
-      roundRect(-w / 2, -h / 2, w, h, h / 2);
-      ctx.fill();
-
-      // sausage
-      ctx.fillStyle = "#a9371f";
-      roundRect(-w * .46, -h * .28, w * .92, h * .56, h * .28);
-      ctx.fill();
-
-      // mustard
-      ctx.strokeStyle = "#ffd829";
-      ctx.lineWidth = Math.max(3, h * .14);
-      ctx.lineCap = "round";
-      ctx.beginPath();
-
-      const startX = -w * .38;
-      const endX = w * .38;
-      const segments = 12;
-
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const px = startX + (endX - startX) * t;
-        const py = Math.sin(t * Math.PI * 6) * h * .13;
-
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+      if (tongueImg.complete && tongueImg.naturalWidth > 0) {
+        ctx.drawImage(tongueImg, -w / 2, -h / 2, w, h);
+      } else {
+        ctx.fillStyle = "#111";
+        ctx.fillRect(-w / 2, -h / 2, w, h);
       }
-
-      ctx.stroke();
-
-      // bun shine
-      ctx.globalAlpha = .28;
-      ctx.fillStyle = "#fff0b8";
-      roundRect(-w * .42, -h * .42, w * .84, h * .18, h * .09);
-      ctx.fill();
 
       ctx.restore();
     }
@@ -942,7 +1021,6 @@
       const height = width * aspect;
 
       ctx.save();
-
       ctx.globalAlpha = head.alpha;
       ctx.translate(head.x, head.y);
       ctx.rotate(head.rotation);
@@ -957,12 +1035,6 @@
         ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-
-        ctx.fillStyle = "#111";
-        ctx.font = `${head.size}px serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(":)", 0, 0);
       }
 
       ctx.restore();
@@ -971,14 +1043,12 @@
     function drawPopTexts() {
       for (const pop of popTexts) {
         ctx.save();
-
         ctx.globalAlpha = pop.alpha;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = "rgba(65,184,188,.95)";
         ctx.font = `900 ${Math.min(W * .065, 42)}px Impact, Arial Black, sans-serif`;
         ctx.fillText(pop.text, pop.x, pop.y);
-
         ctx.restore();
       }
     }
@@ -990,7 +1060,6 @@
       const scale = 1 + (maxTimer - timer) * .14;
 
       ctx.save();
-
       ctx.globalAlpha = alpha;
       ctx.translate(W / 2, y);
       ctx.rotate(rotate);
@@ -1000,7 +1069,6 @@
       ctx.fillStyle = color;
       ctx.font = `900 ${Math.min(W * .22, 130)}px Impact, Arial Black, sans-serif`;
       ctx.fillText(text, 0, 0);
-
       ctx.restore();
     }
 
@@ -1008,13 +1076,11 @@
       if (!state.message) return;
 
       ctx.save();
-
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = state.message === "+ BALL" ? "rgba(65,184,188,.75)" : "rgba(0,0,0,.75)";
       ctx.font = `900 ${Math.min(W * .11, 64)}px Impact, Arial Black, sans-serif`;
       ctx.fillText(state.message, W / 2, H * .36);
-
       ctx.restore();
     }
 
@@ -1026,15 +1092,15 @@
       drawVisitorCounter();
       drawSmoke();
 
-      for (const target of pearlTargets) drawPearlTarget(target);
-      drawPearlPieces();
+      for (const target of targets) drawTarget(target);
+      drawTargetPieces();
 
       for (const ball of balls) {
         if (state.fireMode) drawFireball(ball);
         else drawBeachBall(ball);
       }
 
-      drawHotdog();
+      drawTongueBar();
 
       for (const head of trollHeads) drawTrollHead(head);
 
@@ -1050,10 +1116,8 @@
     function loop(now) {
       const dt = Math.min(.033, (now - state.lastTime) / 1000 || 0);
       state.lastTime = now;
-
       update(dt);
       draw();
-
       requestAnimationFrame(loop);
     }
 
@@ -1093,6 +1157,7 @@
 
     sizeCanvas();
     resetGame();
+    loadLeaderboard();
     requestAnimationFrame(loop);
   </script>
 </body>

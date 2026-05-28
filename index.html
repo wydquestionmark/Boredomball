@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Baskets 000</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: #ddd;
+      font-family: Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      touch-action: manipulation;
+      user-select: none;
+    }
+
+    #game {
+      width: 100vw;
+      height: 100dvh;
+      display: block;
+      background: #000;
+    }
+
+    #hint {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,.45);
+      font: 14px Arial, sans-serif;
+      letter-spacing: .08em;
+      text-align: center;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hint">TAP / SPACE TO DROP THE HOOP</div>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const hint = document.getElementById('hint');
+
+    let W = 0;
+    let H = 0;
+    let dpr = 1;
+
+    const state = {
+      score: 0,
+      round: 'aiming', // aiming, settling, result
+      message: '',
+      messageTimer: 0,
+      lastTime: 0,
+    };
+
+    const ball = {
+      x: 0,
+      baseY: 0,
+      amp: 145,
+      minAmp: 18,
+      phase: 0,
+      speed: 3.25,
+      radius: 18,
+      y: 0,
+    };
+
+    const hoop = {
+      x: 0,
+      y: 0,
+      width: 94,
+      rimHeight: 18,
+      netLength: 78,
+      dir: 1,
+      speed: 245,
+      targetSpeed: 245,
+      settled: false,
+    };
+
+    function resize() {
+      dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      ball.x = W / 2;
+      ball.baseY = H * 0.245;
+      ball.radius = Math.max(13, Math.min(19, W * 0.035));
+
+      hoop.y = H * 0.78;
+      hoop.width = Math.max(74, Math.min(100, W * 0.23));
+      hoop.netLength = Math.max(58, Math.min(82, H * 0.095));
+      if (!hoop.x) hoop.x = W / 2;
+    }
+
+    function padScore(n) {
+      return String(n).padStart(3, '0');
+    }
+
+    function startSettle() {
+      if (state.round !== 'aiming') return;
+      state.round = 'settling';
+      hoop.targetSpeed = 0;
+      hint.style.opacity = 0;
+    }
+
+    function resetRound() {
+      state.round = 'aiming';
+      state.message = '';
+      state.messageTimer = 0;
+      ball.amp = Math.max(105, Math.min(155, H * 0.16));
+      ball.phase = -Math.PI / 2;
+      ball.speed = 3.25;
+      hoop.targetSpeed = 245;
+      hoop.speed = 245;
+      hoop.dir = Math.random() > 0.5 ? 1 : -1;
+      hoop.x = W / 2;
+      hint.style.opacity = 1;
+    }
+
+    function checkBasket() {
+      const rimY = hoop.y;
+      const rimLeft = hoop.x - hoop.width / 2;
+      const rimRight = hoop.x + hoop.width / 2;
+      const ballBottom = ball.y + ball.radius;
+      const ballCenterInside = ball.x > rimLeft + 12 && ball.x < rimRight - 12;
+      const ballAtRim = Math.abs(ballBottom - rimY) < 22;
+
+      if (ballCenterInside && ballAtRim) {
+        state.score++;
+        state.message = 'BUCKET';
+      } else {
+        state.message = 'MISS';
+      }
+
+      state.round = 'result';
+      state.messageTimer = 1.15;
+    }
+
+    function update(dt) {
+      if (state.round === 'aiming') {
+        hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 7);
+      }
+
+      if (state.round === 'settling') {
+        hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 2.8);
+        ball.amp += (ball.minAmp - ball.amp) * Math.min(1, dt * 1.9);
+        ball.speed += (1.35 - ball.speed) * Math.min(1, dt * 1.6);
+
+        if (Math.abs(hoop.speed) < 3 && ball.amp < ball.minAmp + 3) {
+          hoop.speed = 0;
+          checkBasket();
+        }
+      }
+
+      if (state.round === 'result') {
+        state.messageTimer -= dt;
+        if (state.messageTimer <= 0) resetRound();
+      }
+
+      hoop.x += hoop.dir * hoop.speed * dt;
+      const margin = hoop.width / 2 + 12;
+      if (hoop.x < margin) {
+        hoop.x = margin;
+        hoop.dir = 1;
+      }
+      if (hoop.x > W - margin) {
+        hoop.x = W - margin;
+        hoop.dir = -1;
+      }
+
+      ball.phase += ball.speed * dt;
+      ball.y = ball.baseY + Math.abs(Math.sin(ball.phase)) * ball.amp;
+    }
+
+    function drawTitle() {
+      const top = H * 0.29;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#d9d9d9';
+
+      ctx.font = `900 ${Math.min(W * 0.17, H * 0.14)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText('BASKETS', W / 2, top);
+
+      ctx.font = `900 ${Math.min(W * 0.34, H * 0.29)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(padScore(state.score), W / 2, top + H * 0.17);
+    }
+
+    function drawBall() {
+      const r = ball.radius;
+      const g = ctx.createRadialGradient(ball.x - r * .35, ball.y - r * .45, r * .1, ball.x, ball.y, r);
+      g.addColorStop(0, '#ffb15f');
+      g.addColorStop(.65, '#f47a22');
+      g.addColorStop(1, '#a93e11');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#2b1b14';
+      ctx.lineWidth = Math.max(1.5, r * .11);
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, r * .95, 0, Math.PI * 2);
+      ctx.moveTo(ball.x - r, ball.y);
+      ctx.quadraticCurveTo(ball.x, ball.y + r * .28, ball.x + r, ball.y);
+      ctx.moveTo(ball.x - r, ball.y);
+      ctx.quadraticCurveTo(ball.x, ball.y - r * .28, ball.x + r, ball.y);
+      ctx.moveTo(ball.x, ball.y - r);
+      ctx.quadraticCurveTo(ball.x - r * .38, ball.y, ball.x, ball.y + r);
+      ctx.moveTo(ball.x, ball.y - r);
+      ctx.quadraticCurveTo(ball.x + r * .38, ball.y, ball.x, ball.y + r);
+      ctx.stroke();
+    }
+
+    function drawHoop() {
+      const x = hoop.x;
+      const y = hoop.y;
+      const w = hoop.width;
+      const h = hoop.rimHeight;
+      const net = hoop.netLength;
+
+      ctx.strokeStyle = '#f3f3f3';
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 7; i++) {
+        const t = i / 7;
+        ctx.beginPath();
+        ctx.moveTo(x - w / 2 + t * w, y + h * .2);
+        ctx.lineTo(x - w * .28 + (1 - t) * w * .56, y + net);
+        ctx.stroke();
+      }
+      for (let i = 0; i <= 7; i++) {
+        const t = i / 7;
+        ctx.beginPath();
+        ctx.moveTo(x + w / 2 - t * w, y + h * .2);
+        ctx.lineTo(x + w * .28 - (1 - t) * w * .56, y + net);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#e64b2e';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#ff8a69';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(x, y - 1, w / 2 - 5, h / 2 - 3, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawMessage() {
+      if (!state.message) return;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = state.message === 'BUCKET' ? '#fff' : 'rgba(255,255,255,.7)';
+      ctx.font = `900 ${Math.min(W * 0.12, 56)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(state.message, W / 2, H * 0.62);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      drawBall();
+      drawTitle();
+      drawHoop();
+      drawMessage();
+    }
+
+    function loop(time) {
+      const dt = Math.min(0.033, (time - state.lastTime) / 1000 || 0);
+      state.lastTime = time;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener('resize', resize);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        startSettle();
+      }
+    });
+    window.addEventListener('pointerdown', startSettle);
+
+    resize();
+    resetRound();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

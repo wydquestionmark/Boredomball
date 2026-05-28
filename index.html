@@ -138,10 +138,14 @@
         baseX: x,
         baseY: y,
         size,
-        driftX: (Math.random() > .5 ? 1 : -1) * (24 + Math.random() * 55),
-        driftY: (Math.random() > .5 ? 1 : -1) * (12 + Math.random() * 32),
+        driftX: (Math.random() > .5 ? 1 : -1) * (55 + Math.random() * 95),
+        driftY: (Math.random() > .5 ? 1 : -1) * (32 + Math.random() * 68),
+        speedX: .8 + Math.random() * .9,
+        speedY: .7 + Math.random() * .8,
         pulse: Math.random() * Math.PI * 2,
-        lit: 0
+        lit: 0,
+        alpha: 1,
+        fading: false
       });
     }
 
@@ -215,9 +219,21 @@
     function updateFaces(dt) {
       for (const face of faces) {
         face.pulse += dt;
-        face.x = face.baseX + Math.sin(face.pulse * 0.9) * face.driftX;
-        face.y = face.baseY + Math.cos(face.pulse * 0.7) * face.driftY;
-        face.lit += (0 - face.lit) * dt * 2.2;
+        face.x = face.baseX + Math.sin(face.pulse * face.speedX) * face.driftX;
+        face.y = face.baseY + Math.cos(face.pulse * face.speedY) * face.driftY;
+
+        if (face.fading) {
+          face.lit += function hitFace(face) {
+      face.lit = 1;
+      face.fading = true;
+    }t * .55;
+        }
+      }
+
+      faces = faces.filter(face => face.alpha > 0);
+
+      if (faces.length < 2 && state.running) {
+        createFace();
       }
     }
 
@@ -415,6 +431,7 @@
         : 'rgb(137,117,40)';
 
       ctx.save();
+      ctx.globalAlpha = face.alpha;
       ctx.translate(face.x, face.y);
 
       ctx.fillStyle = color;

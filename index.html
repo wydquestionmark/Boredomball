@@ -59,7 +59,8 @@
       lastTime: performance.now(),
       gravity: 1320,
       nextBallScore: 5,
-      nextFaceScore: 3,
+      nextFaceScore: 30,
+      nextFaceSpawnTimer: 0,
       message: '',
       messageTimer: 0
     };
@@ -139,6 +140,8 @@
         baseX: x,
         baseY: y,
         size,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() > .5 ? 1 : -1) * (.45 + Math.random() * 1.1),
         driftX: (Math.random() > .5 ? 1 : -1) * (55 + Math.random() * 95),
         driftY: (Math.random() > .5 ? 1 : -1) * (32 + Math.random() * 68),
         speedX: .8 + Math.random() * .9,
@@ -154,7 +157,8 @@
       state.score = 0;
       state.running = true;
       state.nextBallScore = 5;
-      state.nextFaceScore = 3;
+      state.nextFaceScore = 30;
+      state.nextFaceSpawnTimer = 0;
       state.message = '';
       state.messageTimer = 0;
       paddle.x = W / 2;
@@ -183,11 +187,9 @@
         addBall();
         state.nextBallScore += 5;
       }
-      if (state.score >= 30) {
-        while (state.score >= state.nextFaceScore) {
-          createFace();
-          state.nextFaceScore += 3;
-        }
+      if (state.score >= state.nextFaceScore) {
+        state.nextFaceSpawnTimer = 0;
+        state.nextFaceScore += 3;
       }
     }
 
@@ -218,10 +220,19 @@
     }
 
     function updateFaces(dt) {
+      if (state.score >= 30 && faces.length < 1) {
+        state.nextFaceSpawnTimer -= dt;
+        if (state.nextFaceSpawnTimer <= 0) {
+          createFace();
+          state.nextFaceSpawnTimer = 1.2 + Math.random() * 1.8;
+        }
+      }
+
       for (const face of faces) {
         face.pulse += dt;
         face.x = face.baseX + Math.sin(face.pulse * face.speedX) * face.driftX;
         face.y = face.baseY + Math.cos(face.pulse * face.speedY) * face.driftY;
+        face.rotation += face.rotationSpeed * dt;
 
         if (face.fading) {
           face.lit += (1 - face.lit) * dt * 8;
@@ -231,9 +242,7 @@
 
       faces = faces.filter(face => face.alpha > 0);
 
-      if (state.score >= 30 && faces.length < 2 && state.running) {
-        createFace();
-      }
+      
     }
 
     function hitFace(face) {
@@ -417,6 +426,7 @@
       ctx.save();
       ctx.globalAlpha = face.alpha;
       ctx.translate(face.x, face.y);
+      ctx.rotate(face.rotation);
 
       ctx.fillStyle = color;
       ctx.beginPath();

@@ -52,6 +52,8 @@
     let popTexts = [];
     let poops = [];
     let smokePuffs = [];
+      trollHeads = [];
+    let trollHeads = [];
 
     const keys = { left: false, right: false };
 
@@ -72,6 +74,7 @@
       milestoneWowSpin: 0,
       did25Wow: false,
       did35Poops: false,
+      lastTrollScore: -1,
       fireMode: false,
       did50Shrink: false,
       highScoreTimer: 0,
@@ -180,6 +183,7 @@
       state.milestoneWowSpin = 0;
       state.did25Wow = false;
       state.did35Poops = false;
+      state.lastTrollScore = -1;
       state.fireMode = false;
       state.did50Shrink = false;
       state.highScoreTimer = 0;
@@ -226,7 +230,33 @@
       }
     }
 
+    function scoreHasSixOrSeven() {
+      return String(state.score).includes('6') || String(state.score).includes('7');
+    }
+
+    function spawnTrollHeads() {
+      const count = 1 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        const size = 34 + Math.random() * 58;
+        trollHeads.push({
+          x: Math.random() * W,
+          y: -size - Math.random() * 180,
+          vy: 120 + Math.random() * 230,
+          vx: (Math.random() - .5) * 80,
+          size,
+          rotation: (Math.random() - .5) * .35,
+          rotationSpeed: (Math.random() - .5) * 1.2,
+          alpha: 1
+        });
+      }
+    }
+
     function checkMilestones() {
+      if (scoreHasSixOrSeven() && state.score !== state.lastTrollScore) {
+        spawnTrollHeads();
+        state.lastTrollScore = state.score;
+      }
+
       if (state.score >= 25 && !state.did25Wow) trigger25Wow();
       if (state.score >= 35 && !state.did35Poops) triggerPoopRain();
       if (state.score >= 50 && !state.did50Shrink) {
@@ -352,6 +382,17 @@
       smokePuffs = smokePuffs.filter(puff => puff.life > 0);
     }
 
+    function updateTrollHeads(dt) {
+      for (const head of trollHeads) {
+        head.y += head.vy * dt;
+        head.x += head.vx * dt;
+        head.rotation += head.rotationSpeed * dt;
+        head.vy += 60 * dt;
+        if (head.y > H * .78) head.alpha -= dt * .75;
+      }
+      trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 140);
+    }
+
     function updatePoops(dt) {
       for (const poop of poops) {
         if (!poop.landed) {
@@ -458,6 +499,7 @@
       updatePaddle(dt);
       updateFaces(dt);
       updatePoops(dt);
+      updateTrollHeads(dt);
       updateSmoke(dt);
 
       for (const ball of balls) updateBall(ball, dt);
@@ -716,6 +758,95 @@
       ctx.fillRect(paddle.x - paddle.w / 2, paddle.y - paddle.h / 2, paddle.w, paddle.h);
     }
 
+    function drawTrollHead(head) {
+      const s = head.size / 100;
+      ctx.save();
+      ctx.globalAlpha = head.alpha;
+      ctx.translate(head.x, head.y);
+      ctx.rotate(head.rotation);
+      ctx.scale(s, s);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#111';
+      ctx.fillStyle = '#fff';
+      ctx.lineWidth = 6;
+
+      // head outline
+      ctx.beginPath();
+      ctx.moveTo(-82, -22);
+      ctx.bezierCurveTo(-74, -64, -8, -77, 66, -69);
+      ctx.bezierCurveTo(99, -61, 105, -17, 82, 9);
+      ctx.bezierCurveTo(77, 43, 35, 62, -2, 78);
+      ctx.bezierCurveTo(-52, 92, -94, 65, -88, 22);
+      ctx.bezierCurveTo(-105, 4, -103, -13, -82, -22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // huge grin
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.moveTo(-63, 4);
+      ctx.bezierCurveTo(-28, 35, 43, 34, 76, -2);
+      ctx.bezierCurveTo(59, 50, -39, 62, -66, 15);
+      ctx.closePath();
+      ctx.fill();
+
+      // teeth
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(-51, 10);
+      ctx.bezierCurveTo(-20, 25, 35, 24, 63, 4);
+      ctx.lineTo(55, 20);
+      ctx.bezierCurveTo(20, 39, -25, 35, -55, 19);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      for (let i = -38; i <= 42; i += 18) {
+        ctx.beginPath();
+        ctx.moveTo(i, 13);
+        ctx.lineTo(i + 5, 32);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(-52, 21);
+      ctx.bezierCurveTo(-18, 31, 26, 31, 58, 15);
+      ctx.stroke();
+
+      // eyes
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.ellipse(-34, -29, 20, 8, .15, 0, Math.PI * 2);
+      ctx.ellipse(33, -29, 20, 8, -.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(-26, -30, 3.5, 0, Math.PI * 2);
+      ctx.arc(42, -30, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // nose and face lines
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(-5, -20);
+      ctx.bezierCurveTo(-17, -2, -12, 7, 5, 4);
+      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-44 + i * 16, -59 - i * 2);
+        ctx.bezierCurveTo(-18 + i * 8, -66, 20 + i * 10, -64, 57, -57 + i * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawTrollHeads() {
+      for (const head of trollHeads) drawTrollHead(head);
+    }
+
     function drawPoops() {
       for (const poop of poops) {
         ctx.save();
@@ -813,6 +944,7 @@
         else drawBeachBall(ball);
       }
       drawPaddle();
+      drawTrollHeads();
       drawPoops();
       drawPopTexts();
       drawStreakWow();

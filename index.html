@@ -40,7 +40,7 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE TONGUE</div>
+  <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script>
     const canvas = document.getElementById("game");
@@ -54,7 +54,8 @@
       beachball.png
       troll1.png
       troll2.png
-      tonguebar.png
+
+      You no longer need tonguebar.png.
 
       GLOBAL LEADERBOARD:
       This works locally with localStorage immediately.
@@ -76,9 +77,6 @@
     const trollTargetHitImg = new Image();
     trollTargetHitImg.src = "troll2.png";
 
-    const tongueImg = new Image();
-    tongueImg.src = "tonguebar.png";
-
     let W = window.innerWidth || 390;
     let H = window.innerHeight || 700;
     let dpr = 1;
@@ -91,6 +89,7 @@
     let smokePuffs = [];
     let trollHeads = [];
     let leaderboard = [];
+    let barGlow = 0;
 
     const keys = { left: false, right: false };
 
@@ -140,7 +139,7 @@
       x: W / 2,
       y: H * .83,
       w: 260,
-      h: 46,
+      h: 14,
       velocity: 0,
       acceleration: 4300,
       maxSpeed: 1420,
@@ -174,7 +173,7 @@
 
       const baseWidth = Math.max(180, Math.min(340, W * .30));
       paddle.w = state.did50Shrink ? baseWidth * (2 / 3) : baseWidth;
-      paddle.h = paddle.w * .25;
+      paddle.h = Math.max(10, Math.min(16, H * .014));
       paddle.y = H * .83;
       paddle.x = clamp(paddle.x || W / 2, paddle.w / 2, W - paddle.w / 2);
 
@@ -248,6 +247,8 @@
       state.fireMode = false;
       state.infernoMode = false;
 
+      barGlow = 0;
+
       paddle.x = W / 2;
       paddle.velocity = 0;
       paddle.targetX = null;
@@ -261,7 +262,7 @@
       trollHeads = [];
 
       sizeCanvas();
-      hint.textContent = "USE ARROW KEYS OR DRAG TO CONTROL THE TONGUE";
+      hint.textContent = "USE ARROW KEYS OR DRAG TO CONTROL THE BAR";
     }
 
     function addBall() {
@@ -319,7 +320,6 @@
         state.did50Shrink = true;
         state.fireMode = true;
         paddle.w *= 2 / 3;
-        paddle.h = paddle.w * .25;
         state.message = "FIRE MODE";
         state.messageTimer = 1.2;
       }
@@ -603,10 +603,10 @@
       const ballBottom = ball.y + ball.r;
 
       const movingDown = ball.vy > 0;
-      const crossingTongue = ballBottom >= paddleTop && ballBottom <= paddleTop + 42;
-      const touchingTongue = ball.x >= paddleLeft - ball.r * .25 && ball.x <= paddleRight + ball.r * .25;
+      const crossingBar = ballBottom >= paddleTop && ballBottom <= paddleTop + 42;
+      const touchingBar = ball.x >= paddleLeft - ball.r * .25 && ball.x <= paddleRight + ball.r * .25;
 
-      if (movingDown && crossingTongue && touchingTongue) {
+      if (movingDown && crossingBar && touchingBar) {
         const hitPosition = (ball.x - paddle.x) / (paddle.w / 2);
         const randomBounce = 760 + Math.random() * 520;
         const carryBounce = Math.abs(ball.vy) * (.78 + Math.random() * .28);
@@ -616,6 +616,8 @@
         ball.vx += hitPosition * (320 + Math.random() * 320) + paddle.velocity * .48;
         ball.vx = clamp(ball.vx, -900, 900);
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
+
+        barGlow = Math.min(2, Math.abs(ball.vy) / 600);
 
         state.targetStreak = 0;
         addScore(1);
@@ -639,6 +641,7 @@
       updateTrollHeads(dt);
       updateSmoke(dt);
       updateTargetPieces(dt);
+      barGlow *= Math.pow(.92, dt * 60);
 
       if (state.running) {
         updatePaddle(dt);
@@ -721,7 +724,7 @@
       state.scoreSubmitted = true;
 
       setTimeout(() => {
-        const raw = prompt(`Score: ${state.score}\\nEnter 3 initials for the leaderboard:`, "AAA");
+        const raw = prompt(`Score: ${state.score}\nEnter 3 initials for the leaderboard:`, "AAA");
         if (!raw) return;
 
         const initials = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
@@ -981,7 +984,7 @@
       }
     }
 
-    function drawTongueBar() {
+    function drawGlowingGreenBar() {
       const x = paddle.x;
       const y = paddle.y;
       const w = paddle.w;
@@ -990,14 +993,45 @@
       ctx.save();
       ctx.translate(x, y);
 
-      if (tongueImg.complete && tongueImg.naturalWidth > 0) {
-        ctx.drawImage(tongueImg, -w / 2, -h / 2, w, h);
-      } else {
-        ctx.fillStyle = "#111";
-        ctx.fillRect(-w / 2, -h / 2, w, h);
+      ctx.shadowBlur = 18 + barGlow * 42;
+      ctx.shadowColor = `rgba(0,255,100,${0.72 + Math.min(barGlow, 1) * 0.28})`;
+
+      const grad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+      grad.addColorStop(0, "#00aa44");
+      grad.addColorStop(0.5, "#73ff9d");
+      grad.addColorStop(1, "#00aa44");
+
+      ctx.fillStyle = grad;
+      roundRect(-w / 2, -h / 2, w, h, h / 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = `rgba(230,255,230,${0.72 + Math.min(barGlow, 1) * 0.25})`;
+      roundRect(-w / 2 + 4, -h / 4, w - 8, h / 2, h / 4);
+      ctx.fill();
+
+      if (barGlow > 0.08) {
+        ctx.globalAlpha = Math.min(0.8, barGlow * 0.55);
+        ctx.fillStyle = "#ffffff";
+        roundRect(-w / 2 + 8, -h * 0.18, w - 16, h * 0.36, h * 0.18);
+        ctx.fill();
       }
 
       ctx.restore();
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
     }
 
     function drawPoops() {
@@ -1100,7 +1134,7 @@
         else drawBeachBall(ball);
       }
 
-      drawTongueBar();
+      drawGlowingGreenBar();
 
       for (const head of trollHeads) drawTrollHead(head);
 

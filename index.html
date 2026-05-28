@@ -49,6 +49,7 @@
     let dpr = 1;
     let balls = [];
     let faces = [];
+    let popTexts = [];
 
     const keys = { left: false, right: false };
 
@@ -62,7 +63,9 @@
       nextFaceScore: 30,
       nextFaceSpawnTimer: 0,
       message: '',
-      messageTimer: 0
+      messageTimer: 0,
+      smileStreak: 0,
+      wowTimer: 0
     };
 
     try {
@@ -161,6 +164,9 @@
       state.nextFaceSpawnTimer = 0;
       state.message = '';
       state.messageTimer = 0;
+      state.smileStreak = 0;
+      state.wowTimer = 0;
+      popTexts = [];
       paddle.x = W / 2;
       paddle.velocity = 0;
       paddle.targetX = null;
@@ -248,8 +254,28 @@
     function hitFace(face) {
       face.lit = 1;
       face.fading = true;
-      state.message = 'POP';
-      state.messageTimer = .35;
+
+      state.score += 1;
+      state.smileStreak += 1;
+
+      if (state.score > state.best) {
+        state.best = state.score;
+        try { localStorage.setItem('keepyBest', state.best); } catch (e) {}
+      }
+
+      popTexts.push({
+        text: 'Pop!',
+        x: face.x,
+        y: face.y,
+        vy: -42,
+        life: 0.7,
+        alpha: 1
+      });
+
+      if (state.smileStreak >= 3) {
+        state.wowTimer = 1.25;
+        state.smileStreak = 0;
+      }
     }
 
     function bounceOnFace(ball, face) {
@@ -338,6 +364,7 @@
         ball.vx += hitPosition * (320 + Math.random() * 320) + paddle.velocity * .48;
         ball.vx = clamp(ball.vx, -900, 900);
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
+        state.smileStreak = 0;
         scorePoint();
       }
     }
@@ -360,6 +387,15 @@
         state.messageTimer -= dt;
         if (state.messageTimer <= 0) state.message = '';
       }
+
+      if (state.wowTimer > 0) state.wowTimer -= dt;
+
+      for (const pop of popTexts) {
+        pop.life -= dt;
+        pop.y += pop.vy * dt;
+        pop.alpha = Math.max(0, pop.life / 0.7);
+      }
+      popTexts = popTexts.filter(pop => pop.life > 0);
     }
 
     function drawScore() {
@@ -462,6 +498,35 @@
       ctx.fillRect(paddle.x - paddle.w / 2, paddle.y - paddle.h / 2, paddle.w, paddle.h);
     }
 
+    function drawPopTexts() {
+      for (const pop of popTexts) {
+        ctx.save();
+        ctx.globalAlpha = pop.alpha;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(65,184,188,.95)';
+        ctx.font = `900 ${Math.min(W * .065, 42)}px Impact, Arial Black, sans-serif`;
+        ctx.fillText(pop.text, pop.x, pop.y);
+        ctx.restore();
+      }
+    }
+
+    function drawWow() {
+      if (state.wowTimer <= 0) return;
+      const alpha = Math.min(1, state.wowTimer / 0.55);
+      const scale = 1 + (1.25 - state.wowTimer) * 0.18;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(W / 2, H * .34);
+      ctx.scale(scale, scale);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(65,184,188,.92)';
+      ctx.font = `900 ${Math.min(W * .22, 130)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText('WOW!', 0, 0);
+      ctx.restore();
+    }
+
     function drawMessage() {
       if (!state.message) return;
       ctx.save();
@@ -479,6 +544,8 @@
       for (const face of faces) drawFace(face);
       for (const ball of balls) drawBeachBall(ball);
       drawPaddle();
+      drawPopTexts();
+      drawWow();
       drawMessage();
     }
 

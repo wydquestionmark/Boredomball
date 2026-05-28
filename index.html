@@ -44,15 +44,15 @@
     const ctx = canvas.getContext('2d');
     const hint = document.getElementById('hint');
 
-    let W = window.innerWidth;
-    let H = window.innerHeight;
+    let W = window.innerWidth || 390;
+    let H = window.innerHeight || 700;
     let dpr = 1;
+
     let balls = [];
     let faces = [];
     let popTexts = [];
     let poops = [];
     let smokePuffs = [];
-      trollHeads = [];
     let trollHeads = [];
 
     const keys = { left: false, right: false };
@@ -72,13 +72,13 @@
       streakWowTimer: 0,
       milestoneWowTimer: 0,
       milestoneWowSpin: 0,
+      highScoreTimer: 0,
       did25Wow: false,
       did35Poops: false,
-      lastTrollScore: -1,
-      fireMode: false,
       did50Shrink: false,
-      highScoreTimer: 0,
-      infernoMode: false
+      fireMode: false,
+      infernoMode: false,
+      lastTrollScore: -1
     };
 
     try {
@@ -118,8 +118,8 @@
       canvas.style.height = H + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const basePaddleWidth = Math.max(145, Math.min(270, W * .24));
-      paddle.w = state.did50Shrink ? basePaddleWidth * (2 / 3) : basePaddleWidth;
+      const baseWidth = Math.max(145, Math.min(270, W * .24));
+      paddle.w = state.did50Shrink ? baseWidth * (2 / 3) : baseWidth;
       paddle.h = Math.max(5, Math.min(8, H * .007));
       paddle.y = H * .83;
       paddle.x = clamp(paddle.x || W / 2, paddle.w / 2, W - paddle.w / 2);
@@ -130,11 +130,11 @@
       }
     }
 
-    function createBall(x, y) {
+    function createBall(x = W / 2, y = H * .25) {
       const direction = Math.random() > .5 ? 1 : -1;
       return {
-        x: x ?? W / 2,
-        y: y ?? H * .25,
+        x,
+        y,
         r: ballRadius(),
         vx: direction * (170 + Math.random() * 240),
         vy: 60 + Math.random() * 120,
@@ -150,9 +150,7 @@
       const y = 90 + Math.random() * Math.max(80, scoreboardZone - 180);
 
       faces.push({
-        id: Math.random().toString(36).slice(2),
-        x,
-        y,
+        x, y,
         baseX: x,
         baseY: y,
         size,
@@ -181,13 +179,13 @@
       state.streakWowTimer = 0;
       state.milestoneWowTimer = 0;
       state.milestoneWowSpin = 0;
+      state.highScoreTimer = 0;
       state.did25Wow = false;
       state.did35Poops = false;
-      state.lastTrollScore = -1;
-      state.fireMode = false;
       state.did50Shrink = false;
-      state.highScoreTimer = 0;
+      state.fireMode = false;
       state.infernoMode = false;
+      state.lastTrollScore = -1;
 
       paddle.x = W / 2;
       paddle.velocity = 0;
@@ -198,6 +196,9 @@
       popTexts = [];
       poops = [];
       smokePuffs = [];
+      trollHeads = [];
+
+      sizeCanvas();
       hint.textContent = 'USE ARROW KEYS OR DRAG TO CONTROL THE BAR';
     }
 
@@ -231,28 +232,24 @@
     }
 
     function scoreHasSixOrSeven() {
-      const scoreText = String(state.score);
-      return scoreText.includes('6') || scoreText.includes('7');
+      const text = String(state.score);
+      return text.includes('6') || text.includes('7');
     }
 
     function spawnTrollHeads() {
       const count = 2 + Math.floor(Math.random() * 4);
-
       for (let i = 0; i < count; i++) {
         const size = 42 + Math.random() * 72;
-        const startX = Math.random() * W;
-        const startDelay = Math.random() * 0.65;
-
         trollHeads.push({
-          x: startX,
+          x: Math.random() * W,
           y: -size - Math.random() * 260,
-          vx: (Math.random() - 0.5) * 55,
+          vx: (Math.random() - .5) * 55,
           vy: 135 + Math.random() * 165,
           size,
-          rotation: (Math.random() - 0.5) * 0.45,
-          rotationSpeed: (Math.random() - 0.5) * 0.85,
+          rotation: (Math.random() - .5) * .45,
+          rotationSpeed: (Math.random() - .5) * .85,
           alpha: 1,
-          delay: startDelay,
+          delay: Math.random() * .65,
           wobble: Math.random() * Math.PI * 2
         });
       }
@@ -263,7 +260,6 @@
         spawnTrollHeads();
         state.lastTrollScore = state.score;
       }
-
       if (state.score >= 25 && !state.did25Wow) trigger25Wow();
       if (state.score >= 35 && !state.did35Poops) triggerPoopRain();
       if (state.score >= 50 && !state.did50Shrink) {
@@ -273,7 +269,6 @@
         state.message = 'FIRE MODE';
         state.messageTimer = 1.2;
       }
-
       if (state.score >= 60 && !state.infernoMode) {
         state.infernoMode = true;
         state.message = 'INFERNO';
@@ -343,7 +338,6 @@
         face.x = face.baseX + Math.sin(face.pulse * face.speedX) * face.driftX;
         face.y = face.baseY + Math.cos(face.pulse * face.speedY) * face.driftY;
         face.rotation += face.rotationSpeed * dt;
-
         if (face.fading) {
           face.lit += (1 - face.lit) * dt * 8;
           face.alpha -= dt * .55;
@@ -358,21 +352,21 @@
         for (const ball of balls) {
           const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
           if (speed > 80) {
-            const smokeMultiplier = state.infernoMode ? 3 : 1;
             const angle = Math.atan2(ball.vy, ball.vx) + Math.PI;
-            for (let i = 0; i < smokeMultiplier; i++) smokePuffs.push({
-              x: ball.x + Math.cos(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
-              y: ball.y + Math.sin(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
-              vx: Math.cos(angle) * (20 + Math.random() * 60) + (Math.random() - .5) * 24,
-              vy: Math.sin(angle) * (20 + Math.random() * 60) - 18 - Math.random() * 18,
-              r: ball.r * (.22 + Math.random() * .26),
-              life: .75 + Math.random() * .45,
-              maxLife: 1.2,
-              alpha: state.infernoMode
-                ? .38 + Math.random() * .28
-                : .26 + Math.random() * .22,
-              ember: state.infernoMode && Math.random() > .55
-            });
+            const count = state.infernoMode ? 3 : 1;
+            for (let i = 0; i < count; i++) {
+              smokePuffs.push({
+                x: ball.x + Math.cos(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
+                y: ball.y + Math.sin(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
+                vx: Math.cos(angle) * (20 + Math.random() * 60) + (Math.random() - .5) * 24,
+                vy: Math.sin(angle) * (20 + Math.random() * 60) - 18 - Math.random() * 18,
+                r: ball.r * (.22 + Math.random() * .26),
+                life: .75 + Math.random() * .45,
+                maxLife: 1.2,
+                alpha: state.infernoMode ? .38 + Math.random() * .28 : .26 + Math.random() * .22,
+                ember: state.infernoMode && Math.random() > .55
+              });
+            }
           }
         }
       }
@@ -382,32 +376,11 @@
         puff.x += puff.vx * dt;
         puff.y += puff.vy * dt;
         puff.vx *= Math.pow(.985, dt * 60);
-        puff.vy -= puff.ember ? -8 * dt : 6 * dt;
+        puff.vy += puff.ember ? 80 * dt : -6 * dt;
         puff.r += puff.ember ? 4 * dt : 12 * dt;
       }
 
       smokePuffs = smokePuffs.filter(puff => puff.life > 0);
-    }
-
-    function updateTrollHeads(dt) {
-      for (const head of trollHeads) {
-        if (head.delay > 0) {
-          head.delay -= dt;
-          continue;
-        }
-
-        head.wobble += dt * 2.2;
-        head.x += (head.vx + Math.sin(head.wobble) * 18) * dt;
-        head.y += head.vy * dt;
-        head.vy += 85 * dt;
-        head.rotation += head.rotationSpeed * dt;
-
-        if (head.y > H * 0.70) {
-          head.alpha -= dt * 0.75;
-        }
-      }
-
-      trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 180);
     }
 
     function updatePoops(dt) {
@@ -415,12 +388,10 @@
         if (!poop.landed) {
           poop.y += poop.vy * dt;
           poop.x += Math.sin(performance.now() * .002 + poop.wobble) * .8;
-
           const paddleTop = paddle.y - paddle.h / 2;
           const hitsBar = poop.y + poop.size * .45 >= paddleTop &&
             poop.x > paddle.x - paddle.w / 2 &&
             poop.x < paddle.x + paddle.w / 2;
-
           if (hitsBar) {
             poop.landed = true;
             poop.y = paddleTop - poop.size * .18;
@@ -429,28 +400,32 @@
           poop.alpha -= dt * .22;
         }
       }
-
       poops = poops.filter(poop => poop.alpha > 0 && poop.y < H + 80);
+    }
+
+    function updateTrollHeads(dt) {
+      for (const head of trollHeads) {
+        if (head.delay > 0) {
+          head.delay -= dt;
+          continue;
+        }
+        head.wobble += dt * 2.2;
+        head.x += (head.vx + Math.sin(head.wobble) * 18) * dt;
+        head.y += head.vy * dt;
+        head.vy += 85 * dt;
+        head.rotation += head.rotationSpeed * dt;
+        if (head.y > H * .70) head.alpha -= dt * .75;
+      }
+      trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 180);
     }
 
     function hitFace(face) {
       if (face.fading) return;
-
       face.lit = 1;
       face.fading = true;
       state.smileStreak += 1;
-
       addScore(1);
-
-      popTexts.push({
-        text: 'Pop!',
-        x: face.x,
-        y: face.y,
-        vy: -42,
-        life: .7,
-        alpha: 1
-      });
-
+      popTexts.push({ text: 'Pop!', x: face.x, y: face.y, vy: -42, life: .7, alpha: 1 });
       if (state.smileStreak >= 3) {
         state.streakWowTimer = 1.25;
         state.smileStreak = 0;
@@ -532,7 +507,6 @@
         state.messageTimer -= dt;
         if (state.messageTimer <= 0) state.message = '';
       }
-
       if (state.highScoreTimer > 0) state.highScoreTimer -= dt;
       if (state.streakWowTimer > 0) state.streakWowTimer -= dt;
       if (state.milestoneWowTimer > 0) {
@@ -552,17 +526,54 @@
       const hue = (state.score * 7) % 360;
       const mainColor = `hsla(${hue}, 78%, 52%, .34)`;
       const bestColor = `hsla(${(hue + 35) % 360}, 78%, 45%, .42)`;
-
       ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = mainColor;
       ctx.font = `900 ${Math.min(W * .34, H * .28)}px Impact, Arial Black, sans-serif`;
       ctx.fillText(String(state.score).padStart(3, '0'), W / 2, H * .47);
-
       ctx.font = `900 ${Math.min(W * .075, 46)}px Impact, Arial Black, sans-serif`;
       ctx.fillStyle = bestColor;
       ctx.fillText('BEST ' + String(state.best).padStart(3, '0'), W / 2, H * .64);
+      ctx.restore();
+    }
+
+    function drawBeachBall(ball) {
+      const x = ball.x, y = ball.y, r = ball.r;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ball.spin);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.clip();
+
+      const panels = [
+        ['#f6c21f', -Math.PI * .95, -Math.PI * .28],
+        ['#f7f9fb', -Math.PI * .28, Math.PI * .18],
+        ['#d13b3f', Math.PI * .18, Math.PI * .82],
+        ['#dfe7ed', Math.PI * .82, Math.PI * 1.35],
+        ['#159bd4', Math.PI * 1.35, Math.PI * 1.75]
+      ];
+      for (const [color, start, end] of panels) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, -r * .72);
+        ctx.arc(0, 0, r, start, end);
+        ctx.closePath();
+        ctx.fill();
+      }
+      const shine = ctx.createRadialGradient(-r * .35, -r * .45, r * .05, 0, 0, r);
+      shine.addColorStop(0, 'rgba(255,255,255,.65)');
+      shine.addColorStop(.45, 'rgba(255,255,255,.12)');
+      shine.addColorStop(1, 'rgba(0,0,0,.12)');
+      ctx.fillStyle = shine;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f7f7f7';
+      ctx.beginPath();
+      ctx.arc(0, -r * .72, r * .13, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
@@ -579,7 +590,7 @@
           grad.addColorStop(1, 'rgba(0,0,0,0)');
         } else {
           grad.addColorStop(0, 'rgba(65,65,65,.55)');
-        grad.addColorStop(.55, 'rgba(95,95,95,.22)');
+          grad.addColorStop(.55, 'rgba(95,95,95,.22)');
           grad.addColorStop(1, 'rgba(120,120,120,0)');
         }
         ctx.fillStyle = grad;
@@ -592,13 +603,11 @@
 
     function drawFireball(ball) {
       const x = ball.x, y = ball.y, r = ball.r;
-      const time = performance.now() * 0.006;
+      const time = performance.now() * .006;
 
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(ball.spin);
-
-      // Soot-covered singed beachball center.
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.clip();
@@ -610,7 +619,6 @@
         ['#6a6861', Math.PI * .82, Math.PI * 1.35],
         ['#123d4f', Math.PI * 1.35, Math.PI * 1.75]
       ];
-
       for (const [color, start, end] of panels) {
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -630,7 +638,6 @@
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // Scorched blotches.
       ctx.fillStyle = 'rgba(0,0,0,.38)';
       for (let i = 0; i < 9; i++) {
         const a = i * 1.7 + time * .15;
@@ -638,17 +645,16 @@
         ctx.ellipse(Math.cos(a) * r * .45, Math.sin(a * 1.3) * r * .42, r * .12, r * .07, a, 0, Math.PI * 2);
         ctx.fill();
       }
-
       ctx.restore();
 
-      // Glowing fiery edge only.
       ctx.save();
       ctx.translate(x, y);
       ctx.globalCompositeOperation = 'lighter';
-
-      const pulse = state.infernoMode
-        ? 1 + Math.sin(time * 4.2) * .22
-        : .75 + Math.sin(time * 2.3) * .12;
+      if (state.infernoMode) {
+        ctx.shadowBlur = r * 1.4;
+        ctx.shadowColor = 'rgba(255,80,0,.95)';
+      }
+      const pulse = state.infernoMode ? 1 + Math.sin(time * 4.2) * .22 : .75 + Math.sin(time * 2.3) * .12;
       const glow = ctx.createRadialGradient(0, 0, r * .72, 0, 0, r * 1.28 * pulse);
       glow.addColorStop(0, 'rgba(255,120,0,0)');
       glow.addColorStop(.55, 'rgba(255,145,0,.16)');
@@ -658,12 +664,6 @@
       ctx.beginPath();
       ctx.arc(0, 0, r * 1.32, 0, Math.PI * 2);
       ctx.fill();
-
-      if (state.infernoMode) {
-        ctx.shadowBlur = r * 1.4;
-        ctx.shadowColor = 'rgba(255,80,0,.95)';
-      }
-
       ctx.lineWidth = Math.max(3, r * .11);
       ctx.strokeStyle = 'rgba(255,170,30,.82)';
       ctx.beginPath();
@@ -678,7 +678,6 @@
       }
       ctx.closePath();
       ctx.stroke();
-
       ctx.lineWidth = Math.max(1.5, r * .045);
       ctx.strokeStyle = 'rgba(255,245,150,.9)';
       ctx.beginPath();
@@ -687,71 +686,22 @@
       ctx.restore();
     }
 
-    function drawBeachBall(ball) {
-      const x = ball.x, y = ball.y, r = ball.r;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(ball.spin);
-
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.clip();
-
-      const panels = [
-        ['#f6c21f', -Math.PI * .95, -Math.PI * .28],
-        ['#f7f9fb', -Math.PI * .28, Math.PI * .18],
-        ['#d13b3f', Math.PI * .18, Math.PI * .82],
-        ['#dfe7ed', Math.PI * .82, Math.PI * 1.35],
-        ['#159bd4', Math.PI * 1.35, Math.PI * 1.75]
-      ];
-
-      for (const [color, start, end] of panels) {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(0, -r * .72);
-        ctx.arc(0, 0, r, start, end);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      const shine = ctx.createRadialGradient(-r * .35, -r * .45, r * .05, 0, 0, r);
-      shine.addColorStop(0, 'rgba(255,255,255,.65)');
-      shine.addColorStop(.45, 'rgba(255,255,255,.12)');
-      shine.addColorStop(1, 'rgba(0,0,0,.12)');
-      ctx.fillStyle = shine;
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#f7f7f7';
-      ctx.beginPath();
-      ctx.arc(0, -r * .72, r * .13, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
     function drawFace(face) {
       const glow = face.lit;
-      const color = glow > .02
-        ? `rgb(${Math.floor(140 + glow * 115)}, ${Math.floor(120 + glow * 95)}, 0)`
-        : 'rgb(137,117,40)';
-
+      const color = glow > .02 ? `rgb(${Math.floor(140 + glow * 115)}, ${Math.floor(120 + glow * 95)}, 0)` : 'rgb(137,117,40)';
       ctx.save();
       ctx.globalAlpha = face.alpha;
       ctx.translate(face.x, face.y);
       ctx.rotate(face.rotation);
-
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(0, 0, face.size, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.ellipse(-face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
       ctx.ellipse(face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
       ctx.fill();
-
       if (glow > .02) {
         ctx.beginPath();
         ctx.arc(0, face.size * .12, face.size * .52, 0, Math.PI, false);
@@ -766,113 +716,12 @@
         ctx.lineTo(face.size * .42, face.size * .34);
         ctx.stroke();
       }
-
       ctx.restore();
     }
 
     function drawPaddle() {
       ctx.fillStyle = '#111';
       ctx.fillRect(paddle.x - paddle.w / 2, paddle.y - paddle.h / 2, paddle.w, paddle.h);
-    }
-
-    function drawTrollHead(head) {
-      if (head.delay > 0) return;
-
-      const s = head.size / 100;
-
-      ctx.save();
-      ctx.globalAlpha = head.alpha;
-      ctx.translate(head.x, head.y);
-      ctx.rotate(head.rotation);
-      ctx.scale(s, s);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      // White head shape with thick black outline.
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.moveTo(-88, -18);
-      ctx.bezierCurveTo(-78, -57, -30, -72, 35, -70);
-      ctx.bezierCurveTo(78, -69, 95, -44, 101, -11);
-      ctx.bezierCurveTo(113, 15, 91, 37, 68, 42);
-      ctx.bezierCurveTo(44, 68, -22, 89, -67, 69);
-      ctx.bezierCurveTo(-92, 57, -86, 22, -91, 7);
-      ctx.bezierCurveTo(-105, -3, -105, -14, -88, -18);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Big black grin base.
-      ctx.fillStyle = '#050505';
-      ctx.beginPath();
-      ctx.moveTo(-67, 4);
-      ctx.bezierCurveTo(-35, 35, 35, 35, 74, -4);
-      ctx.bezierCurveTo(66, 51, -36, 64, -68, 13);
-      ctx.closePath();
-      ctx.fill();
-
-      // Teeth strip.
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(-55, 9);
-      ctx.bezierCurveTo(-23, 22, 35, 22, 63, 2);
-      ctx.lineTo(57, 22);
-      ctx.bezierCurveTo(22, 40, -28, 36, -58, 21);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Tooth lines.
-      for (let x = -42; x <= 45; x += 17) {
-        ctx.beginPath();
-        ctx.moveTo(x, 11);
-        ctx.lineTo(x + 5, 33);
-        ctx.stroke();
-      }
-      ctx.beginPath();
-      ctx.moveTo(-56, 21);
-      ctx.bezierCurveTo(-22, 32, 26, 32, 59, 15);
-      ctx.stroke();
-
-      // Eyes.
-      ctx.fillStyle = '#111';
-      ctx.beginPath();
-      ctx.ellipse(-34, -29, 20, 8, 0.16, 0, Math.PI * 2);
-      ctx.ellipse(35, -29, 20, 8, -0.16, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(-25, -30, 3.5, 0, Math.PI * 2);
-      ctx.arc(44, -30, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Nose.
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(-4, -19);
-      ctx.bezierCurveTo(-18, -2, -11, 9, 7, 3);
-      ctx.stroke();
-
-      // Wrinkle lines.
-      ctx.lineWidth = 2.4;
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.moveTo(-48 + i * 10, -56 - i * 3);
-        ctx.bezierCurveTo(-18 + i * 6, -66, 28 + i * 8, -63, 67, -54 + i * 3);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-
-    function drawTrollHeads() {
-      for (const head of trollHeads) drawTrollHead(head);
     }
 
     function drawPoops() {
@@ -888,6 +737,73 @@
       }
     }
 
+    function drawTrollHead(head) {
+      if (head.delay > 0) return;
+      const s = head.size / 100;
+      ctx.save();
+      ctx.globalAlpha = head.alpha;
+      ctx.translate(head.x, head.y);
+      ctx.rotate(head.rotation);
+      ctx.scale(s, s);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(-88, -18);
+      ctx.bezierCurveTo(-78, -57, -30, -72, 35, -70);
+      ctx.bezierCurveTo(78, -69, 95, -44, 101, -11);
+      ctx.bezierCurveTo(113, 15, 91, 37, 68, 42);
+      ctx.bezierCurveTo(44, 68, -22, 89, -67, 69);
+      ctx.bezierCurveTo(-92, 57, -86, 22, -91, 7);
+      ctx.bezierCurveTo(-105, -3, -105, -14, -88, -18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#050505';
+      ctx.beginPath();
+      ctx.moveTo(-67, 4);
+      ctx.bezierCurveTo(-35, 35, 35, 35, 74, -4);
+      ctx.bezierCurveTo(66, 51, -36, 64, -68, 13);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-55, 9);
+      ctx.bezierCurveTo(-23, 22, 35, 22, 63, 2);
+      ctx.lineTo(57, 22);
+      ctx.bezierCurveTo(22, 40, -28, 36, -58, 21);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      for (let x = -42; x <= 45; x += 17) {
+        ctx.beginPath();
+        ctx.moveTo(x, 11);
+        ctx.lineTo(x + 5, 33);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.ellipse(-34, -29, 20, 8, .16, 0, Math.PI * 2);
+      ctx.ellipse(35, -29, 20, 8, -.16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(-25, -30, 3.5, 0, Math.PI * 2);
+      ctx.arc(44, -30, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(-4, -19);
+      ctx.bezierCurveTo(-18, -2, -11, 9, 7, 3);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     function drawPopTexts() {
       for (const pop of popTexts) {
         ctx.save();
@@ -901,38 +817,20 @@
       }
     }
 
-    function drawStreakWow() {
-      if (state.streakWowTimer <= 0) return;
-      const alpha = Math.min(1, state.streakWowTimer / .55);
-      const scale = 1 + (1.25 - state.streakWowTimer) * .18;
-
+    function drawOverlayText(text, timer, maxTimer, y, rotate = 0, color = 'rgba(65,184,188,.92)') {
+      if (timer <= 0) return;
+      const alpha = Math.min(1, timer / .55);
+      const scale = 1 + (maxTimer - timer) * .14;
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.translate(W / 2, H * .34);
+      ctx.translate(W / 2, y);
+      ctx.rotate(rotate);
       ctx.scale(scale, scale);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(65,184,188,.92)';
+      ctx.fillStyle = color;
       ctx.font = `900 ${Math.min(W * .22, 130)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText('WOW!', 0, 0);
-      ctx.restore();
-    }
-
-    function drawMilestoneWow() {
-      if (state.milestoneWowTimer <= 0) return;
-      const alpha = Math.min(1, state.milestoneWowTimer / 1.1);
-      const scale = 1 + (2.2 - state.milestoneWowTimer) * .12;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(W / 2, H * .34);
-      ctx.rotate(state.milestoneWowSpin);
-      ctx.scale(scale, scale);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(65,184,188,.92)';
-      ctx.font = `900 ${Math.min(W * .22, 130)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText('WOW!', 0, 0);
+      ctx.fillText(text, 0, 0);
       ctx.restore();
     }
 
@@ -940,12 +838,11 @@
       if (state.highScoreTimer <= 0) return;
       const alpha = Math.min(1, state.highScoreTimer / .55);
       const rise = (1.4 - state.highScoreTimer) * 24;
-
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255, 90, 0, .92)';
+      ctx.fillStyle = 'rgba(255,90,0,.92)';
       ctx.font = `900 ${Math.min(W * .12, 72)}px Impact, Arial Black, sans-serif`;
       ctx.fillText('HIGH SCORE!!!', W / 2, H * .22 - rise);
       ctx.restore();
@@ -967,31 +864,28 @@
       drawScore();
       drawSmoke();
       for (const face of faces) drawFace(face);
-      for (const ball of balls) {
-        if (state.fireMode) drawFireball(ball);
-        else drawBeachBall(ball);
-      }
+      for (const ball of balls) state.fireMode ? drawFireball(ball) : drawBeachBall(ball);
       drawPaddle();
-      drawTrollHeads();
+      for (const head of trollHeads) drawTrollHead(head);
       drawPoops();
       drawPopTexts();
-      drawStreakWow();
-      drawMilestoneWow();
+      drawOverlayText('WOW!', state.streakWowTimer, 1.25, H * .34);
+      drawOverlayText('WOW!', state.milestoneWowTimer, 2.2, H * .34, state.milestoneWowSpin);
       drawHighScore();
       drawMessage();
     }
 
     function loop(now) {
-      const dt = Math.min(.033, (now - state.lastTime) / 1000);
+      const dt = Math.min(.033, (now - state.lastTime) / 1000 || 0);
       state.lastTime = now;
       update(dt);
       draw();
       requestAnimationFrame(loop);
     }
 
-    window.addEventListener('resize', () => sizeCanvas());
+    window.addEventListener('resize', sizeCanvas);
 
-    window.addEventListener('keydown', (event) => {
+    window.addEventListener('keydown', event => {
       if (event.code === 'ArrowLeft' || event.code === 'KeyA') keys.left = true;
       if (event.code === 'ArrowRight' || event.code === 'KeyD') keys.right = true;
       if (event.code === 'Space') {
@@ -1000,31 +894,25 @@
       }
     });
 
-    window.addEventListener('keyup', (event) => {
+    window.addEventListener('keyup', event => {
       if (event.code === 'ArrowLeft' || event.code === 'KeyA') keys.left = false;
       if (event.code === 'ArrowRight' || event.code === 'KeyD') keys.right = false;
     });
 
-    window.addEventListener('pointerdown', (event) => {
+    window.addEventListener('pointerdown', event => {
       if (!state.running) resetGame();
       paddle.targetX = event.clientX;
     });
 
-    window.addEventListener('pointermove', (event) => {
+    window.addEventListener('pointermove', event => {
       paddle.targetX = event.clientX;
     });
 
-    window.addEventListener('pointerup', () => {
-      paddle.targetX = null;
-    });
-
-    window.addEventListener('pointercancel', () => {
-      paddle.targetX = null;
-    });
+    window.addEventListener('pointerup', () => { paddle.targetX = null; });
+    window.addEventListener('pointercancel', () => { paddle.targetX = null; });
 
     sizeCanvas();
     resetGame();
-    draw();
     requestAnimationFrame(loop);
   </script>
 </body>

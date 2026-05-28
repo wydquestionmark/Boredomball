@@ -239,6 +239,8 @@
     function hitFace(face) {
       face.lit = 1;
       face.fading = true;
+      state.message = 'POP';
+      state.messageTimer = .35;
     }
 
     function bounceOnFace(ball, face) {
@@ -247,25 +249,7 @@
       const distance = Math.sqrt(dx * dx + dy * dy);
       const radius = face.size + ball.r;
 
-      if (distance >= radius) return;
-
-      const nx = dx / distance;
-      const ny = dy / distance;
-      const overlap = radius - distance;
-
-      ball.x += nx * overlap;
-      ball.y += ny * overlap;
-
-      const dot = ball.vx * nx + ball.vy * ny;
-
-      if (dot < 0) {
-        ball.vx -= 1.8 * dot * nx;
-        ball.vy -= 1.8 * dot * ny;
-      }
-
-      ball.vx += nx * 40;
-      ball.vy += ny * 40;
-      ball.spinVelocity += ball.vx * 0.002;
+      if (distance >= radius || face.fading) return;
 
       hitFace(face);
     }
@@ -365,7 +349,7 @@
 
       if (state.messageTimer > 0) {
         state.messageTimer -= dt;
-        if (state.messageTimer <= 0 && state.message === '+ BALL') state.message = '';
+        if (state.messageTimer <= 0) state.message = '';
       }
     }
 

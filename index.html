@@ -36,16 +36,37 @@
       white-space: nowrap;
       pointer-events: none;
     }
+
+    #gifBurst {
+      position: fixed;
+      left: 50%;
+      top: 45%;
+      transform: translate(-50%, -50%) scale(1);
+      max-width: 68vw;
+      max-height: 58vh;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1;
+      mix-blend-mode: multiply;
+      transition: opacity .18s linear, transform .18s linear;
+    }
+
+    #gifBurst.show {
+      opacity: .72;
+      transform: translate(-50%, -50%) scale(1.05);
+    }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
+  <img id="gifBurst" alt="" />
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
     const hint = document.getElementById("hint");
+    const gifBurst = document.getElementById("gifBurst");
 
     /*
       REQUIRED FILES IN YOUR GITHUB REPO ROOT:
@@ -55,12 +76,22 @@
       troll1.png
       troll2.png
 
-      You no longer need tonguebar.png.
+      OPTIONAL GIFS:
+      Add the names of any .gif files in your repo root to GIF_FILES.
+      Static GitHub Pages cannot auto-scan a folder, so this list is needed.
+    */
+    const GIF_FILES = [
+      "pearlsmile.gif"
+      // Add more here, for example:
+      // "gif2.gif",
+      // "gif3.gif"
+    ];
 
+    /*
       GLOBAL LEADERBOARD:
-      This works locally with localStorage immediately.
+      Works locally with localStorage by default.
       For a true global leaderboard, create a Firebase Realtime Database
-      and paste the database URL below, for example:
+      and paste the database URL below:
       const FIREBASE_DB_URL = "https://your-project-default-rtdb.firebaseio.com";
     */
     const FIREBASE_DB_URL = "";
@@ -90,6 +121,7 @@
     let trollHeads = [];
     let leaderboard = [];
     let barGlow = 0;
+    let gameOverLetters = [];
 
     const keys = { left: false, right: false };
 
@@ -105,6 +137,7 @@
       nextBallScore: 5,
       nextTargetScore: 30,
       nextTargetSpawnTimer: 0,
+      nextGifScore: 12,
 
       targetStreak: 0,
       message: "",
@@ -123,7 +156,8 @@
       fireMode: false,
       infernoMode: false,
 
-      visitorCount: 0
+      visitorCount: 0,
+      gifTimer: 0
     };
 
     try {
@@ -229,6 +263,7 @@
       state.nextBallScore = 5;
       state.nextTargetScore = 30;
       state.nextTargetSpawnTimer = 0;
+      state.nextGifScore = 12;
 
       state.targetStreak = 0;
       state.message = "";
@@ -247,7 +282,12 @@
       state.fireMode = false;
       state.infernoMode = false;
 
+      state.gifTimer = 0;
+      gifBurst.classList.remove("show");
+      gifBurst.removeAttribute("src");
+
       barGlow = 0;
+      gameOverLetters = [];
 
       paddle.x = W / 2;
       paddle.velocity = 0;
@@ -312,6 +352,22 @@
       }
     }
 
+    function triggerRandomGif() {
+      if (!GIF_FILES.length) return;
+
+      const pick = GIF_FILES[Math.floor(Math.random() * GIF_FILES.length)];
+      gifBurst.src = pick + "?v=" + Date.now();
+      gifBurst.classList.add("show");
+      state.gifTimer = 2.8;
+    }
+
+    function checkGifMilestone() {
+      while (state.score >= state.nextGifScore) {
+        triggerRandomGif();
+        state.nextGifScore += 12;
+      }
+    }
+
     function checkMilestones() {
       if (state.score >= 25 && !state.did25Wow) trigger25Wow();
       if (state.score >= 35 && !state.did35Poops) triggerPoopRain();
@@ -354,6 +410,7 @@
         state.nextTargetScore += 3;
       }
 
+      checkGifMilestone();
       checkMilestones();
     }
 
@@ -428,10 +485,12 @@
       target.rotationSpeed *= 0.2;
 
       state.targetStreak += 1;
-      addScore(1);
+
+      // Face hits are worth +3.
+      addScore(3);
 
       popTexts.push({
-        text: "HIT!",
+        text: "+3!",
         x: target.x,
         y: target.y,
         vy: -42,
@@ -572,6 +631,48 @@
       trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 240);
     }
 
+    function spawnGameOverExplosion(text) {
+      gameOverLetters = [];
+      const chars = text.split("");
+      const fontSize = Math.min(W * .11, 64);
+      const spacing = fontSize * .58;
+      const total = (chars.length - 1) * spacing;
+      const startX = W / 2 - total / 2;
+      const y = H * .36;
+
+      for (let i = 0; i < chars.length; i++) {
+        const char = chars[i];
+        const angle = -Math.PI / 2 + (Math.random() - .5) * Math.PI * 1.4;
+        const speed = 220 + Math.random() * 520;
+
+        gameOverLetters.push({
+          char,
+          x: startX + i * spacing,
+          y,
+          vx: Math.cos(angle) * speed + (i - chars.length / 2) * 18,
+          vy: Math.sin(angle) * speed,
+          rotation: (Math.random() - .5) * .7,
+          rotationSpeed: (Math.random() - .5) * 8,
+          size: fontSize,
+          alpha: 1,
+          life: 1.65
+        });
+      }
+    }
+
+    function updateGameOverLetters(dt) {
+      for (const letter of gameOverLetters) {
+        letter.life -= dt;
+        letter.x += letter.vx * dt;
+        letter.y += letter.vy * dt;
+        letter.vy += 760 * dt;
+        letter.rotation += letter.rotationSpeed * dt;
+        letter.alpha = Math.max(0, letter.life / 1.65);
+      }
+
+      gameOverLetters = gameOverLetters.filter(letter => letter.alpha > 0 && letter.y < H + 180);
+    }
+
     function updateBall(ball, dt) {
       ball.vy += state.gravity * dt;
       ball.x += ball.vx * dt;
@@ -629,7 +730,11 @@
 
       state.gameOver = true;
       state.running = false;
-      state.message = state.roundGotHighScore ? "HIGH SCORE!!!" : "GAME OVER";
+
+      const endText = state.roundGotHighScore ? "HIGH SCORE!!!" : "GAME OVER";
+      state.message = "";
+      spawnGameOverExplosion(endText);
+
       hint.textContent = "TAP OR SPACE TO RESTART";
 
       spawnTrollFlood();
@@ -641,7 +746,15 @@
       updateTrollHeads(dt);
       updateSmoke(dt);
       updateTargetPieces(dt);
+      updateGameOverLetters(dt);
       barGlow *= Math.pow(.92, dt * 60);
+
+      if (state.gifTimer > 0) {
+        state.gifTimer -= dt;
+        if (state.gifTimer <= 0) {
+          gifBurst.classList.remove("show");
+        }
+      }
 
       if (state.running) {
         updatePaddle(dt);
@@ -1087,6 +1200,21 @@
       }
     }
 
+    function drawGameOverLetters() {
+      for (const letter of gameOverLetters) {
+        ctx.save();
+        ctx.globalAlpha = letter.alpha;
+        ctx.translate(letter.x, letter.y);
+        ctx.rotate(letter.rotation);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgba(0,0,0,.78)";
+        ctx.font = `900 ${letter.size}px Impact, Arial Black, sans-serif`;
+        ctx.fillText(letter.char, 0, 0);
+        ctx.restore();
+      }
+    }
+
     function drawOverlayText(text, timer, maxTimer, y, rotate = 0, color = "rgba(65,184,188,.92)") {
       if (timer <= 0) return;
 
@@ -1144,6 +1272,7 @@
       drawOverlayText("WOW!", state.streakWowTimer, 1.25, H * .34);
       drawOverlayText("WOW!", state.milestoneWowTimer, 2.2, H * .34, state.milestoneWowSpin);
 
+      drawGameOverLetters();
       drawMessage();
     }
 

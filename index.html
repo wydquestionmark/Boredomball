@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Baskets 000</title>
+  <title>Boredomball</title>
   <style>
     * { box-sizing: border-box; }
 
@@ -41,7 +41,7 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hint">TAP / SPACE TO DROP THE HOOP</div>
+  <div id="hint">TAP / SPACE TO SET THE HOOP</div>
 
   <script>
     const canvas = document.getElementById('game');
@@ -58,17 +58,19 @@
       message: '',
       messageTimer: 0,
       lastTime: 0,
+      gravity: 2200,
     };
 
     const ball = {
       x: 0,
-      baseY: 0,
-      amp: 145,
-      minAmp: 18,
-      phase: 0,
-      speed: 3.25,
-      radius: 18,
       y: 0,
+      vy: 0,
+      radius: 18,
+      bounceTop: 70,
+      bounceBottom: 0,
+      floorDamping: 0.985,
+      settlingDamping: 0.955,
+      minVelocity: 140,
     };
 
     const hoop = {
@@ -80,7 +82,6 @@
       dir: 1,
       speed: 245,
       targetSpeed: 245,
-      settled: false,
     };
 
     function resize() {
@@ -94,17 +95,24 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       ball.x = W / 2;
-      ball.baseY = H * 0.245;
-      ball.radius = Math.max(13, Math.min(19, W * 0.035));
+      ball.radius = Math.max(13, Math.min(20, W * 0.035));
+      ball.bounceTop = Math.max(42, H * 0.065);
+      ball.bounceBottom = H - ball.radius - 22;
 
-      hoop.y = H * 0.78;
-      hoop.width = Math.max(74, Math.min(100, W * 0.23));
+      hoop.y = H * 0.74;
+      hoop.width = Math.max(74, Math.min(104, W * 0.23));
       hoop.netLength = Math.max(58, Math.min(82, H * 0.095));
       if (!hoop.x) hoop.x = W / 2;
     }
 
     function padScore(n) {
       return String(n).padStart(3, '0');
+    }
+
+    function launchBall(fullPower = true) {
+      ball.y = ball.bounceBottom;
+      const travel = ball.bounceBottom - ball.bounceTop;
+      ball.vy = -Math.sqrt(2 * state.gravity * travel) * (fullPower ? 1 : 0.72);
     }
 
     function startSettle() {
@@ -118,13 +126,11 @@
       state.round = 'aiming';
       state.message = '';
       state.messageTimer = 0;
-      ball.amp = Math.max(105, Math.min(155, H * 0.16));
-      ball.phase = -Math.PI / 2;
-      ball.speed = 3.25;
       hoop.targetSpeed = 245;
       hoop.speed = 245;
       hoop.dir = Math.random() > 0.5 ? 1 : -1;
       hoop.x = W / 2;
+      launchBall(true);
       hint.style.opacity = 1;
     }
 
@@ -133,10 +139,11 @@
       const rimLeft = hoop.x - hoop.width / 2;
       const rimRight = hoop.x + hoop.width / 2;
       const ballBottom = ball.y + ball.radius;
-      const ballCenterInside = ball.x > rimLeft + 12 && ball.x < rimRight - 12;
-      const ballAtRim = Math.abs(ballBottom - rimY) < 22;
+      const ballCenterInside = ball.x > rimLeft + 10 && ball.x < rimRight - 10;
+      const descending = ball.vy > 0;
+      const passingThroughRim = ballBottom >= rimY - 8 && ballBottom <= rimY + 24;
 
-      if (ballCenterInside && ballAtRim) {
+      if (ballCenterInside && descending && passingThroughRim) {
         state.score++;
         state.message = 'BUCKET';
       } else {
@@ -147,17 +154,35 @@
       state.messageTimer = 1.15;
     }
 
+    function updateBall(dt) {
+      ball.vy += state.gravity * dt;
+      ball.y += ball.vy * dt;
+
+      if (ball.y > ball.bounceBottom) {
+        ball.y = ball.bounceBottom;
+
+        if (state.round === 'settling') {
+          ball.vy = -Math.abs(ball.vy) * ball.settlingDamping;
+        } else {
+          ball.vy = -Math.abs(ball.vy) * ball.floorDamping;
+        }
+      }
+
+      if (ball.y < ball.bounceTop) {
+        ball.y = ball.bounceTop;
+        ball.vy = Math.abs(ball.vy) * 0.985;
+      }
+    }
+
     function update(dt) {
       if (state.round === 'aiming') {
         hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 7);
       }
 
       if (state.round === 'settling') {
-        hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 2.8);
-        ball.amp += (ball.minAmp - ball.amp) * Math.min(1, dt * 1.9);
-        ball.speed += (1.35 - ball.speed) * Math.min(1, dt * 1.6);
+        hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 2.25);
 
-        if (Math.abs(hoop.speed) < 3 && ball.amp < ball.minAmp + 3) {
+        if (Math.abs(hoop.speed) < 4 && Math.abs(ball.vy) < ball.minVelocity && ball.y > hoop.y - 12) {
           hoop.speed = 0;
           checkBasket();
         }
@@ -179,12 +204,13 @@
         hoop.dir = -1;
       }
 
-      ball.phase += ball.speed * dt;
-      ball.y = ball.baseY + Math.abs(Math.sin(ball.phase)) * ball.amp;
+      updateBall(dt);
     }
 
-    function drawTitle() {
+    function drawTitleBehindBall() {
       const top = H * 0.29;
+      ctx.save();
+      ctx.globalAlpha = 0.34;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#d9d9d9';
@@ -194,6 +220,7 @@
 
       ctx.font = `900 ${Math.min(W * 0.34, H * 0.29)}px Impact, Arial Black, sans-serif`;
       ctx.fillText(padScore(state.score), W / 2, top + H * 0.17);
+      ctx.restore();
     }
 
     function drawBall() {
@@ -270,8 +297,8 @@
 
     function draw() {
       ctx.clearRect(0, 0, W, H);
+      drawTitleBehindBall();
       drawBall();
-      drawTitle();
       drawHoop();
       drawMessage();
     }

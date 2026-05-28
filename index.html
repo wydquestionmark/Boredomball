@@ -162,8 +162,6 @@
       paddle.targetX = null;
       balls = [createBall(W / 2, H * .25)];
       faces = [];
-      createFace();
-      createFace();
       hint.textContent = 'USE ARROW KEYS OR DRAG TO CONTROL THE BAR';
     }
 
@@ -185,9 +183,11 @@
         addBall();
         state.nextBallScore += 5;
       }
-      while (state.score >= state.nextFaceScore) {
-        createFace();
-        state.nextFaceScore += 3;
+      if (state.score >= 30) {
+        while (state.score >= state.nextFaceScore) {
+          createFace();
+          state.nextFaceScore += 3;
+        }
       }
     }
 
@@ -231,7 +231,7 @@
 
       faces = faces.filter(face => face.alpha > 0);
 
-      if (faces.length < 2 && state.running) {
+      if (state.score >= 30 && faces.length < 2 && state.running) {
         createFace();
       }
     }

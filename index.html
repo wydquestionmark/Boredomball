@@ -74,7 +74,8 @@
       did35Poops: false,
       fireMode: false,
       did50Shrink: false,
-      highScoreTimer: 0
+      highScoreTimer: 0,
+      infernoMode: false
     };
 
     try {
@@ -182,6 +183,7 @@
       state.fireMode = false;
       state.did50Shrink = false;
       state.highScoreTimer = 0;
+      state.infernoMode = false;
 
       paddle.x = W / 2;
       paddle.velocity = 0;
@@ -233,6 +235,12 @@
         paddle.w *= 2 / 3;
         state.message = 'FIRE MODE';
         state.messageTimer = 1.2;
+      }
+
+      if (state.score >= 60 && !state.infernoMode) {
+        state.infernoMode = true;
+        state.message = 'INFERNO';
+        state.messageTimer = 1.4;
       }
     }
 
@@ -313,8 +321,9 @@
         for (const ball of balls) {
           const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
           if (speed > 80) {
+            const smokeMultiplier = state.infernoMode ? 3 : 1;
             const angle = Math.atan2(ball.vy, ball.vx) + Math.PI;
-            smokePuffs.push({
+            for (let i = 0; i < smokeMultiplier; i++) smokePuffs.push({
               x: ball.x + Math.cos(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
               y: ball.y + Math.sin(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
               vx: Math.cos(angle) * (20 + Math.random() * 60) + (Math.random() - .5) * 24,
@@ -322,7 +331,10 @@
               r: ball.r * (.22 + Math.random() * .26),
               life: .75 + Math.random() * .45,
               maxLife: 1.2,
-              alpha: .26 + Math.random() * .22
+              alpha: state.infernoMode
+                ? .38 + Math.random() * .28
+                : .26 + Math.random() * .22,
+              ember: state.infernoMode && Math.random() > .55
             });
           }
         }
@@ -333,8 +345,8 @@
         puff.x += puff.vx * dt;
         puff.y += puff.vy * dt;
         puff.vx *= Math.pow(.985, dt * 60);
-        puff.vy -= 6 * dt;
-        puff.r += 12 * dt;
+        puff.vy -= puff.ember ? -8 * dt : 6 * dt;
+        puff.r += puff.ember ? 4 * dt : 12 * dt;
       }
 
       smokePuffs = smokePuffs.filter(puff => puff.life > 0);
@@ -501,9 +513,16 @@
         ctx.save();
         ctx.globalAlpha = alpha;
         const grad = ctx.createRadialGradient(puff.x, puff.y, 1, puff.x, puff.y, puff.r);
-        grad.addColorStop(0, 'rgba(65,65,65,.55)');
+        if (puff.ember) {
+          grad.addColorStop(0, 'rgba(255,220,120,.95)');
+          grad.addColorStop(.35, 'rgba(255,120,0,.75)');
+          grad.addColorStop(.75, 'rgba(180,20,0,.18)');
+          grad.addColorStop(1, 'rgba(0,0,0,0)');
+        } else {
+          grad.addColorStop(0, 'rgba(65,65,65,.55)');
         grad.addColorStop(.55, 'rgba(95,95,95,.22)');
-        grad.addColorStop(1, 'rgba(120,120,120,0)');
+          grad.addColorStop(1, 'rgba(120,120,120,0)');
+        }
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(puff.x, puff.y, puff.r, 0, Math.PI * 2);
@@ -568,7 +587,9 @@
       ctx.translate(x, y);
       ctx.globalCompositeOperation = 'lighter';
 
-      const pulse = .75 + Math.sin(time * 2.3) * .12;
+      const pulse = state.infernoMode
+        ? 1 + Math.sin(time * 4.2) * .22
+        : .75 + Math.sin(time * 2.3) * .12;
       const glow = ctx.createRadialGradient(0, 0, r * .72, 0, 0, r * 1.28 * pulse);
       glow.addColorStop(0, 'rgba(255,120,0,0)');
       glow.addColorStop(.55, 'rgba(255,145,0,.16)');
@@ -578,6 +599,11 @@
       ctx.beginPath();
       ctx.arc(0, 0, r * 1.32, 0, Math.PI * 2);
       ctx.fill();
+
+      if (state.infernoMode) {
+        ctx.shadowBlur = r * 1.4;
+        ctx.shadowColor = 'rgba(255,80,0,.95)';
+      }
 
       ctx.lineWidth = Math.max(3, r * .11);
       ctx.strokeStyle = 'rgba(255,170,30,.82)';

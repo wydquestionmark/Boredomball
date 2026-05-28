@@ -48,7 +48,7 @@
     let H = window.innerHeight;
     let dpr = 1;
     let balls = [];
-    let ramps = [];
+    let faces = [];
 
     const keys = { left: false, right: false };
 
@@ -59,7 +59,7 @@
       lastTime: performance.now(),
       gravity: 1320,
       nextBallScore: 5,
-      nextRampScore: 3,
+      nextFaceScore: 3,
       message: '',
       messageTimer: 0
     };
@@ -126,30 +126,22 @@
       };
     }
 
-    function createRamp() {
-      const length = Math.max(70, Math.min(135, W * (.09 + Math.random() * .05)));
-      const thickness = 7;
-      const angle = (Math.random() > .5 ? 1 : -1) * (.16 + Math.random() * .22);
-      const x = 80 + Math.random() * Math.max(1, W - 160);
-      const y = H * (.24 + Math.random() * .40);
-      const drift = (Math.random() > .5 ? 1 : -1) * (38 + Math.random() * 58);
-      const verticalDrift = (Math.random() > .5 ? 1 : -1) * (12 + Math.random() * 26);
+    function createFace() {
+      const size = 38 + Math.random() * 70;
+      const x = 90 + Math.random() * Math.max(1, W - 180);
+      const y = H * (.18 + Math.random() * .46);
 
-      ramps.push({
+      faces.push({
         id: Math.random().toString(36).slice(2),
         x,
         y,
-        length,
-        thickness,
-        angle,
-        drift,
         baseX: x,
         baseY: y,
-        verticalDrift,
-        bob: Math.random() * Math.PI * 2,
-        sway: Math.random() * Math.PI * 2,
-        life: 18 + Math.random() * 10,
-        fade: 1
+        size,
+        driftX: (Math.random() > .5 ? 1 : -1) * (24 + Math.random() * 55),
+        driftY: (Math.random() > .5 ? 1 : -1) * (12 + Math.random() * 32),
+        pulse: Math.random() * Math.PI * 2,
+        lit: 0
       });
     }
 
@@ -157,15 +149,16 @@
       state.score = 0;
       state.running = true;
       state.nextBallScore = 5;
-      state.nextRampScore = 3;
+      state.nextFaceScore = 3;
       state.message = '';
       state.messageTimer = 0;
       paddle.x = W / 2;
       paddle.velocity = 0;
       paddle.targetX = null;
       balls = [createBall(W / 2, H * .25)];
-      ramps = [];
-      createRamp();
+      faces = [];
+      createFace();
+      createFace();
       hint.textContent = 'USE ARROW KEYS OR DRAG TO CONTROL THE BAR';
     }
 
@@ -187,9 +180,9 @@
         addBall();
         state.nextBallScore += 5;
       }
-      while (state.score >= state.nextRampScore) {
-        createRamp();
-        state.nextRampScore += 3;
+      while (state.score >= state.nextFaceScore) {
+        createFace();
+        state.nextFaceScore += 3;
       }
     }
 
@@ -219,20 +212,46 @@
       }
     }
 
-    function updateRamps(dt) {
-      for (const ramp of ramps) {
-        ramp.life -= dt;
-        ramp.bob += dt * (0.9 + Math.abs(ramp.drift) * 0.003);
-        ramp.sway += dt * (0.7 + Math.abs(ramp.verticalDrift) * 0.02);
-
-        ramp.x = ramp.baseX + Math.sin(ramp.bob) * ramp.drift;
-        ramp.y = ramp.baseY + Math.sin(ramp.sway) * ramp.verticalDrift;
-
-        ramp.angle += Math.sin(ramp.bob * 0.7) * dt * 0.06;
-        if (ramp.life < 3) ramp.fade = Math.max(0, ramp.life / 3);
+    function updateFaces(dt) {
+      for (const face of faces) {
+        face.pulse += dt;
+        face.x = face.baseX + Math.sin(face.pulse * 0.9) * face.driftX;
+        face.y = face.baseY + Math.cos(face.pulse * 0.7) * face.driftY;
+        face.lit += (0 - face.lit) * dt * 2.2;
       }
-      ramps = ramps.filter(ramp => ramp.life > 0);
-      if (ramps.length < 1 && state.running) createRamp();
+    }
+
+    function hitFace(face) {
+      face.lit = 1;
+    }
+
+    function bounceOnFace(ball, face) {
+      const dx = ball.x - face.x;
+      const dy = ball.y - face.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const radius = face.size + ball.r;
+
+      if (distance >= radius) return;
+
+      const nx = dx / distance;
+      const ny = dy / distance;
+      const overlap = radius - distance;
+
+      ball.x += nx * overlap;
+      ball.y += ny * overlap;
+
+      const dot = ball.vx * nx + ball.vy * ny;
+
+      if (dot < 0) {
+        ball.vx -= 1.8 * dot * nx;
+        ball.vy -= 1.8 * dot * ny;
+      }
+
+      ball.vx += nx * 40;
+      ball.vy += ny * 40;
+      ball.spinVelocity += ball.vx * 0.002;
+
+      hitFace(face);
     }
 
     function bounceOnRamp(ball, ramp) {
@@ -289,7 +308,7 @@
         ball.vy = Math.abs(ball.vy) * .72;
       }
 
-      for (const ramp of ramps) bounceOnRamp(ball, ramp);
+      for (const face of faces) bounceOnFace(ball, face);
 
       const paddleTop = paddle.y - paddle.h / 2;
       const paddleLeft = paddle.x - paddle.w / 2;
@@ -318,7 +337,7 @@
       if (!state.running) return;
 
       updatePaddle(dt);
-      updateRamps(dt);
+      updateFaces(dt);
       for (const ball of balls) updateBall(ball, dt);
       balls = balls.filter(ball => ball.y - ball.r <= H);
 
@@ -389,15 +408,41 @@
       ctx.restore();
     }
 
-    function drawRamp(ramp) {
+    function drawFace(face) {
+      const glow = face.lit;
+      const color = glow > 0.02
+        ? `rgb(${Math.floor(140 + glow * 115)}, ${Math.floor(120 + glow * 95)}, 0)`
+        : 'rgb(137,117,40)';
+
       ctx.save();
-      ctx.globalAlpha = ramp.fade;
-      ctx.translate(ramp.x, ramp.y);
-      ctx.rotate(ramp.angle);
-      ctx.fillStyle = '#111';
-      ctx.fillRect(-ramp.length / 2, -ramp.thickness / 2, ramp.length, ramp.thickness);
-      ctx.fillStyle = 'rgba(65,184,188,.18)';
-      ctx.fillRect(-ramp.length / 2, -ramp.thickness / 2 - 5, ramp.length, 3);
+      ctx.translate(face.x, face.y);
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(0, 0, face.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      // eyes
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(-face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
+      ctx.ellipse(face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (glow > 0.02) {
+        ctx.beginPath();
+        ctx.arc(0, face.size * .12, face.size * .52, 0, Math.PI, false);
+        ctx.lineTo(face.size * .52, face.size * .12);
+        ctx.fill();
+      } else {
+        ctx.lineWidth = Math.max(4, face.size * .08);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-face.size * .42, face.size * .34);
+        ctx.lineTo(face.size * .42, face.size * .34);
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
 
@@ -420,7 +465,7 @@
     function draw() {
       ctx.clearRect(0, 0, W, H);
       drawScore();
-      for (const ramp of ramps) drawRamp(ramp);
+      for (const face of faces) drawFace(face);
       for (const ball of balls) drawBeachBall(ball);
       drawPaddle();
       drawMessage();

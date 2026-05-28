@@ -223,10 +223,8 @@
         face.y = face.baseY + Math.cos(face.pulse * face.speedY) * face.driftY;
 
         if (face.fading) {
-          face.lit += function hitFace(face) {
-      face.lit = 1;
-      face.fading = true;
-    }t * .55;
+          face.lit += (1 - face.lit) * dt * 8;
+          face.alpha -= dt * .55;
         }
       }
 
@@ -239,6 +237,7 @@
 
     function hitFace(face) {
       face.lit = 1;
+      face.fading = true;
     }
 
     function bounceOnFace(ball, face) {

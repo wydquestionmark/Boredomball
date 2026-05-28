@@ -48,6 +48,7 @@
     let H = window.innerHeight;
     let dpr = 1;
     let balls = [];
+    let seagulls = [];
 
     const keys = { left: false, right: false };
 
@@ -59,7 +60,8 @@
       gravity: 1320,
       nextBallScore: 5,
       message: '',
-      messageTimer: 0
+      messageTimer: 0,
+      nextSeagullTime: 20 + Math.random() * 10
     };
 
     try {
@@ -144,6 +146,37 @@
       state.messageTimer = .7;
     }
 
+    function spawnSeagull() {
+      const fromLeft = Math.random() > .5;
+      const size = .55 + Math.random() * 1.25;
+      const y = H * (.08 + Math.random() * .34);
+      const speed = (70 + Math.random() * 130) * (fromLeft ? 1 : -1);
+
+      seagulls.push({
+        x: fromLeft ? -90 * size : W + 90 * size,
+        y,
+        size,
+        vx: speed,
+        flap: Math.random() * Math.PI * 2,
+        bob: Math.random() * Math.PI * 2
+      });
+
+      state.nextSeagullTime = 20 + Math.random() * 18;
+    }
+
+    function updateSeagulls(dt) {
+      state.nextSeagullTime -= dt;
+      if (state.nextSeagullTime <= 0) spawnSeagull();
+
+      for (const gull of seagulls) {
+        gull.x += gull.vx * dt;
+        gull.flap += dt * 7;
+        gull.bob += dt * 2;
+      }
+
+      seagulls = seagulls.filter(gull => gull.x > -160 * gull.size && gull.x < W + 160 * gull.size);
+    }
+
     function scorePoint() {
       state.score += 1;
       if (state.score > state.best) {
@@ -225,6 +258,7 @@
     }
 
     function update(dt) {
+      updateSeagulls(dt);
       if (!state.running) return;
 
       updatePaddle(dt);
@@ -298,6 +332,36 @@
       ctx.restore();
     }
 
+    function drawSeagull(gull) {
+      const wingLift = Math.sin(gull.flap) * 9 * gull.size;
+      const bobY = Math.sin(gull.bob) * 4 * gull.size;
+      const facing = gull.vx > 0 ? 1 : -1;
+
+      ctx.save();
+      ctx.translate(gull.x, gull.y + bobY);
+      ctx.scale(facing * gull.size, gull.size);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.strokeStyle = 'rgba(30,30,30,.72)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-26, 0);
+      ctx.quadraticCurveTo(-10, -18 - wingLift, 0, 0);
+      ctx.quadraticCurveTo(10, -18 + wingLift, 26, 0);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255,255,255,.9)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-22, -1);
+      ctx.quadraticCurveTo(-9, -12 - wingLift, 0, 0);
+      ctx.quadraticCurveTo(9, -12 + wingLift, 22, -1);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
     function drawPaddle() {
       ctx.fillStyle = '#111';
       ctx.fillRect(paddle.x - paddle.w / 2, paddle.y - paddle.h / 2, paddle.w, paddle.h);
@@ -317,6 +381,7 @@
     function draw() {
       ctx.clearRect(0, 0, W, H);
       drawScore();
+      for (const gull of seagulls) drawSeagull(gull);
       for (const ball of balls) drawBeachBall(ball);
       drawPaddle();
       drawMessage();

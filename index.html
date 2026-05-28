@@ -155,9 +155,12 @@
       seagulls.push({
         x: fromLeft ? -120 * size : W + 120 * size,
         y,
+        baseY: y,
         size,
         vx: speed,
         vy: 0,
+        tilt: (Math.random() - 0.5) * 0.18,
+        tiltVelocity: (Math.random() - 0.5) * 0.12,
         rotation: 0,
         rotationSpeed: 0,
         hit: false,
@@ -178,11 +181,7 @@
           gull.y += gull.vy * dt;
           gull.x += gull.vx * 0.35 * dt;
           gull.rotation += gull.rotationSpeed * dt;
-          gull.flap += dt * 18;
-        } else {
-          gull.x += gull.vx * dt;
-          gull.flap += dt * 9;
-          gull.bob += dt * 2;
+          gull.flap +=
         }
       }
 
@@ -314,7 +313,7 @@
 
       if (state.messageTimer > 0) {
         state.messageTimer -= dt;
-        if (state.messageTimer <= 0 && state.message === '+ BALL') state.message = '';
+        if (state.messageTimer <= 0 && (state.message === '+ BALL' || state.message === 'BONK')) state.message = '';
       }
     }
 
@@ -536,4 +535,3 @@
   </script>
 </body>
 </html>
-

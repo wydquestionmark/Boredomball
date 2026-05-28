@@ -44,8 +44,7 @@
     const ctx = canvas.getContext('2d');
     const hint = document.getElementById('hint');
 
-    // Save your troll image in the same folder as this index.html file.
-    // The filename must be exactly: troll.png
+    // Put troll.png in the same folder as index.html.
     const trollImg = new Image();
     trollImg.src = 'troll.png';
 
@@ -66,6 +65,7 @@
       score: 0,
       best: 0,
       running: true,
+      gameOver: false,
       lastTime: performance.now(),
       gravity: 1320,
       nextBallScore: 5,
@@ -82,8 +82,7 @@
       did35Poops: false,
       did50Shrink: false,
       fireMode: false,
-      infernoMode: false,
-      lastTrollScore: -1
+      infernoMode: false
     };
 
     try {
@@ -175,6 +174,7 @@
     function resetGame() {
       state.score = 0;
       state.running = true;
+      state.gameOver = false;
       state.nextBallScore = 5;
       state.nextFaceScore = 30;
       state.nextFaceSpawnTimer = 0;
@@ -190,7 +190,6 @@
       state.did50Shrink = false;
       state.fireMode = false;
       state.infernoMode = false;
-      state.lastTrollScore = -1;
 
       paddle.x = W / 2;
       paddle.velocity = 0;
@@ -236,35 +235,25 @@
       }
     }
 
-    function scoreHasSixOrSeven() {
-      const text = String(state.score);
-      return text.includes('6') || text.includes('7');
-    }
-
-    function spawnTrollHeads() {
-      const count = 2 + Math.floor(Math.random() * 4);
-      for (let i = 0; i < count; i++) {
-        const size = 28 + Math.random() * 34;
+    function spawnTrollFlood() {
+      for (let i = 0; i < 55; i++) {
+        const size = 22 + Math.random() * 42;
         trollHeads.push({
           x: Math.random() * W,
-          y: -size - Math.random() * 260,
-          vx: (Math.random() - .5) * 55,
-          vy: 135 + Math.random() * 165,
+          y: -size - Math.random() * 1300,
+          vx: (Math.random() - .5) * 140,
+          vy: 190 + Math.random() * 460,
           size,
-          rotation: (Math.random() - .5) * .45,
-          rotationSpeed: (Math.random() - .5) * .85,
+          rotation: (Math.random() - .5) * 1.6,
+          rotationSpeed: (Math.random() - .5) * 3.2,
           alpha: 1,
-          delay: Math.random() * .65,
+          delay: Math.random() * 1.4,
           wobble: Math.random() * Math.PI * 2
         });
       }
     }
 
     function checkMilestones() {
-      if (scoreHasSixOrSeven() && state.score !== state.lastTrollScore) {
-        spawnTrollHeads();
-        state.lastTrollScore = state.score;
-      }
       if (state.score >= 25 && !state.did25Wow) trigger25Wow();
       if (state.score >= 35 && !state.did35Poops) triggerPoopRain();
       if (state.score >= 50 && !state.did50Shrink) {
@@ -330,7 +319,7 @@
     }
 
     function updateFaces(dt) {
-      if (state.score >= 30 && faces.length < 1) {
+      if (state.score >= 30 && faces.length < 1 && state.running) {
         state.nextFaceSpawnTimer -= dt;
         if (state.nextFaceSpawnTimer <= 0) {
           createFace();
@@ -353,7 +342,7 @@
     }
 
     function updateSmoke(dt) {
-      if (state.fireMode) {
+      if (state.fireMode && state.running) {
         for (const ball of balls) {
           const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
           if (speed > 80) {
@@ -417,11 +406,11 @@
         head.wobble += dt * 2.2;
         head.x += (head.vx + Math.sin(head.wobble) * 18) * dt;
         head.y += head.vy * dt;
-        head.vy += 85 * dt;
+        head.vy += 95 * dt;
         head.rotation += head.rotationSpeed * dt;
-        if (head.y > H * .70) head.alpha -= dt * .75;
+        if (head.y > H * .72) head.alpha -= dt * .45;
       }
-      trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 180);
+      trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 240);
     }
 
     function hitFace(face) {
@@ -490,22 +479,28 @@
       }
     }
 
-    function update(dt) {
-      if (!state.running) return;
+    function triggerGameOver() {
+      if (state.gameOver) return;
+      state.gameOver = true;
+      state.running = false;
+      state.message = 'GAME OVER';
+      hint.textContent = 'TAP OR SPACE TO RESTART';
+      spawnTrollFlood();
+    }
 
-      updatePaddle(dt);
-      updateFaces(dt);
+    function update(dt) {
       updatePoops(dt);
       updateTrollHeads(dt);
       updateSmoke(dt);
 
-      for (const ball of balls) updateBall(ball, dt);
-      balls = balls.filter(ball => ball.y - ball.r <= H);
+      if (state.running) {
+        updatePaddle(dt);
+        updateFaces(dt);
 
-      if (balls.length === 0) {
-        state.running = false;
-        state.message = 'GAME OVER';
-        hint.textContent = 'TAP OR SPACE TO RESTART';
+        for (const ball of balls) updateBall(ball, dt);
+        balls = balls.filter(ball => ball.y - ball.r <= H);
+
+        if (balls.length === 0) triggerGameOver();
       }
 
       if (state.messageTimer > 0) {

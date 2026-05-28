@@ -399,13 +399,19 @@
     }
 
     function drawScore() {
+      const hue = (state.score * 7) % 360;
+      const mainColor = `hsla(${hue}, 78%, 52%, .34)`;
+      const bestColor = `hsla(${(hue + 35) % 360}, 78%, 45%, .42)`;
+
       ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(65,184,188,.22)';
+      ctx.fillStyle = mainColor;
       ctx.font = `900 ${Math.min(W * .24, H * .20)}px Impact, Arial Black, sans-serif`;
       ctx.fillText(String(state.score).padStart(3, '0'), W / 2, H * .48);
+
       ctx.font = `900 ${Math.min(W * .055, 34)}px Impact, Arial Black, sans-serif`;
+      ctx.fillStyle = bestColor;
       ctx.fillText('BEST ' + String(state.best).padStart(3, '0'), W / 2, H * .59);
       ctx.restore();
     }

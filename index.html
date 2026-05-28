@@ -50,18 +50,23 @@
     // Save these image files in the same GitHub folder as index.html:
     // troll.png
     // beachball.png
+    // pearlsmile.gif
     const trollImg = new Image();
     trollImg.src = "troll.png";
 
     const beachBallImg = new Image();
     beachBallImg.src = "beachball.png";
 
+    const pearlImg = new Image();
+    pearlImg.src = "pearlsmile.gif";
+
     let W = window.innerWidth || 390;
     let H = window.innerHeight || 700;
     let dpr = 1;
 
     let balls = [];
-    let faces = [];
+    let pearlTargets = [];
+    let pearlPieces = [];
     let popTexts = [];
     let poops = [];
     let smokePuffs = [];
@@ -78,10 +83,10 @@
       gravity: 1320,
 
       nextBallScore: 5,
-      nextFaceScore: 30,
-      nextFaceSpawnTimer: 0,
+      nextPearlScore: 30,
+      nextPearlSpawnTimer: 0,
 
-      smileStreak: 0,
+      pearlStreak: 0,
       message: "",
       messageTimer: 0,
 
@@ -174,27 +179,25 @@
       };
     }
 
-    function createFace() {
-      const scoreboardZone = H * .60;
-      const size = 38 + Math.random() * 70;
+    function createPearlTarget() {
+      const size = 54 + Math.random() * 72;
       const x = 90 + Math.random() * Math.max(1, W - 180);
-      const y = 90 + Math.random() * Math.max(80, scoreboardZone - 180);
+      const topLimit = H * .52;
+      const y = 80 + Math.random() * Math.max(80, topLimit - 160);
 
-      faces.push({
+      pearlTargets.push({
         x, y,
         baseX: x,
         baseY: y,
         size,
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() > .5 ? 1 : -1) * (.45 + Math.random() * 1.1),
-        driftX: (Math.random() > .5 ? 1 : -1) * (55 + Math.random() * 95),
-        driftY: (Math.random() > .5 ? 1 : -1) * (32 + Math.random() * 68),
-        speedX: .8 + Math.random() * .9,
-        speedY: .7 + Math.random() * .8,
+        rotation: (Math.random() - .5) * .3,
+        rotationSpeed: (Math.random() > .5 ? 1 : -1) * (.35 + Math.random() * .9),
+        driftX: (Math.random() > .5 ? 1 : -1) * (50 + Math.random() * 90),
+        driftY: (Math.random() > .5 ? 1 : -1) * (24 + Math.random() * 58),
+        speedX: .75 + Math.random() * .85,
+        speedY: .65 + Math.random() * .75,
         pulse: Math.random() * Math.PI * 2,
-        lit: 0,
-        alpha: 1,
-        fading: false
+        broken: false
       });
     }
 
@@ -204,10 +207,10 @@
       state.gameOver = false;
 
       state.nextBallScore = 5;
-      state.nextFaceScore = 30;
-      state.nextFaceSpawnTimer = 0;
+      state.nextPearlScore = 30;
+      state.nextPearlSpawnTimer = 0;
 
-      state.smileStreak = 0;
+      state.pearlStreak = 0;
       state.message = "";
       state.messageTimer = 0;
 
@@ -229,7 +232,8 @@
       paddle.targetX = null;
 
       balls = [createBall(W / 2, H * .25)];
-      faces = [];
+      pearlTargets = [];
+      pearlPieces = [];
       popTexts = [];
       poops = [];
       smokePuffs = [];
@@ -327,9 +331,9 @@
         state.nextBallScore += 5;
       }
 
-      if (state.score >= state.nextFaceScore) {
-        state.nextFaceSpawnTimer = 0;
-        state.nextFaceScore += 3;
+      if (state.score >= state.nextPearlScore) {
+        state.nextPearlSpawnTimer = 0;
+        state.nextPearlScore += 3;
       }
 
       checkMilestones();
@@ -362,29 +366,97 @@
       }
     }
 
-    function updateFaces(dt) {
-      if (state.score >= 30 && faces.length < 1 && state.running) {
-        state.nextFaceSpawnTimer -= dt;
+    function updatePearlTargets(dt) {
+      if (state.score >= 30 && pearlTargets.length < 1 && state.running) {
+        state.nextPearlSpawnTimer -= dt;
 
-        if (state.nextFaceSpawnTimer <= 0) {
-          createFace();
-          state.nextFaceSpawnTimer = 1.2 + Math.random() * 1.8;
+        if (state.nextPearlSpawnTimer <= 0) {
+          createPearlTarget();
+          state.nextPearlSpawnTimer = 1.2 + Math.random() * 1.8;
         }
       }
 
-      for (const face of faces) {
-        face.pulse += dt;
-        face.x = face.baseX + Math.sin(face.pulse * face.speedX) * face.driftX;
-        face.y = face.baseY + Math.cos(face.pulse * face.speedY) * face.driftY;
-        face.rotation += face.rotationSpeed * dt;
+      for (const target of pearlTargets) {
+        target.pulse += dt;
+        target.x = target.baseX + Math.sin(target.pulse * target.speedX) * target.driftX;
+        target.y = target.baseY + Math.cos(target.pulse * target.speedY) * target.driftY;
+        target.rotation += target.rotationSpeed * dt;
+      }
 
-        if (face.fading) {
-          face.lit += (1 - face.lit) * dt * 8;
-          face.alpha -= dt * .55;
+      pearlTargets = pearlTargets.filter(target => !target.broken);
+    }
+
+    function updatePearlPieces(dt) {
+      for (const piece of pearlPieces) {
+        piece.vy += 980 * dt;
+        piece.x += piece.vx * dt;
+        piece.y += piece.vy * dt;
+        piece.rotation += piece.rotationSpeed * dt;
+        piece.alpha -= dt * .18;
+      }
+
+      pearlPieces = pearlPieces.filter(piece => piece.alpha > 0 && piece.y < H + 180);
+    }
+
+    function breakPearlTarget(target) {
+      if (target.broken) return;
+      target.broken = true;
+
+      const grid = 4;
+      const pieceSize = target.size / grid;
+
+      for (let row = 0; row < grid; row++) {
+        for (let col = 0; col < grid; col++) {
+          const localX = (col - (grid - 1) / 2) * pieceSize;
+          const localY = (row - (grid - 1) / 2) * pieceSize;
+
+          const angle = target.rotation;
+          const worldX = target.x + localX * Math.cos(angle) - localY * Math.sin(angle);
+          const worldY = target.y + localX * Math.sin(angle) + localY * Math.cos(angle);
+
+          pearlPieces.push({
+            x: worldX,
+            y: worldY,
+            sx: col / grid,
+            sy: row / grid,
+            sw: 1 / grid,
+            sh: 1 / grid,
+            size: pieceSize,
+            vx: (col - 1.5) * 85 + (Math.random() - .5) * 160,
+            vy: -190 + row * 35 + Math.random() * 110,
+            rotation: target.rotation + (Math.random() - .5) * .8,
+            rotationSpeed: (Math.random() - .5) * 5,
+            alpha: 1
+          });
         }
       }
 
-      faces = faces.filter(face => face.alpha > 0);
+      state.pearlStreak += 1;
+      addScore(1);
+
+      popTexts.push({
+        text: "CRACK!",
+        x: target.x,
+        y: target.y,
+        vy: -42,
+        life: .7,
+        alpha: 1
+      });
+
+      if (state.pearlStreak >= 3) {
+        state.streakWowTimer = 1.25;
+        state.pearlStreak = 0;
+      }
+    }
+
+    function touchPearlTarget(ball, target) {
+      const dx = ball.x - target.x;
+      const dy = ball.y - target.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < target.size * .58 + ball.r) {
+        breakPearlTarget(target);
+      }
     }
 
     function updateSmoke(dt) {
@@ -467,38 +539,6 @@
       trollHeads = trollHeads.filter(head => head.alpha > 0 && head.y < H + 240);
     }
 
-    function hitFace(face) {
-      if (face.fading) return;
-
-      face.lit = 1;
-      face.fading = true;
-
-      state.smileStreak += 1;
-      addScore(1);
-
-      popTexts.push({
-        text: "Pop!",
-        x: face.x,
-        y: face.y,
-        vy: -42,
-        life: .7,
-        alpha: 1
-      });
-
-      if (state.smileStreak >= 3) {
-        state.streakWowTimer = 1.25;
-        state.smileStreak = 0;
-      }
-    }
-
-    function touchFace(ball, face) {
-      const dx = ball.x - face.x;
-      const dy = ball.y - face.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < face.size + ball.r) hitFace(face);
-    }
-
     function updateBall(ball, dt) {
       ball.vy += state.gravity * dt;
       ball.x += ball.vx * dt;
@@ -522,7 +562,7 @@
         ball.vy = Math.abs(ball.vy) * .72;
       }
 
-      for (const face of faces) touchFace(ball, face);
+      for (const target of pearlTargets) touchPearlTarget(ball, target);
 
       const paddleTop = paddle.y - paddle.h / 2;
       const paddleLeft = paddle.x - paddle.w / 2;
@@ -544,7 +584,7 @@
         ball.vx = clamp(ball.vx, -900, 900);
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
 
-        state.smileStreak = 0;
+        state.pearlStreak = 0;
         addScore(1);
       }
     }
@@ -564,10 +604,11 @@
       updatePoops(dt);
       updateTrollHeads(dt);
       updateSmoke(dt);
+      updatePearlPieces(dt);
 
       if (state.running) {
         updatePaddle(dt);
-        updateFaces(dt);
+        updatePearlTargets(dt);
 
         for (const ball of balls) updateBall(ball, dt);
 
@@ -762,45 +803,59 @@
       ctx.restore();
     }
 
-    function drawFace(face) {
-      const glow = face.lit;
-      const color = glow > .02
-        ? `rgb(${Math.floor(140 + glow * 115)}, ${Math.floor(120 + glow * 95)}, 0)`
-        : "rgb(137,117,40)";
+    function drawPearlTarget(target) {
+      const size = target.size;
 
       ctx.save();
+      ctx.translate(target.x, target.y);
+      ctx.rotate(target.rotation);
 
-      ctx.globalAlpha = face.alpha;
-      ctx.translate(face.x, face.y);
-      ctx.rotate(face.rotation);
-
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(0, 0, face.size, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.ellipse(-face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
-      ctx.ellipse(face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (glow > .02) {
-        ctx.beginPath();
-        ctx.arc(0, face.size * .12, face.size * .52, 0, Math.PI, false);
-        ctx.lineTo(face.size * .52, face.size * .12);
-        ctx.fill();
+      if (pearlImg.complete && pearlImg.naturalWidth > 0) {
+        ctx.drawImage(pearlImg, -size / 2, -size / 2, size, size);
       } else {
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = Math.max(4, face.size * .08);
-        ctx.lineCap = "round";
+        ctx.fillStyle = "#eee";
+        ctx.strokeStyle = "#111";
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(-face.size * .42, face.size * .34);
-        ctx.lineTo(face.size * .42, face.size * .34);
+        ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
       }
 
       ctx.restore();
+    }
+
+    function drawPearlPieces() {
+      for (const piece of pearlPieces) {
+        ctx.save();
+        ctx.globalAlpha = piece.alpha;
+        ctx.translate(piece.x, piece.y);
+        ctx.rotate(piece.rotation);
+
+        if (pearlImg.complete && pearlImg.naturalWidth > 0) {
+          const sourceW = pearlImg.naturalWidth * piece.sw;
+          const sourceH = pearlImg.naturalHeight * piece.sh;
+          const sourceX = pearlImg.naturalWidth * piece.sx;
+          const sourceY = pearlImg.naturalHeight * piece.sy;
+
+          ctx.drawImage(
+            pearlImg,
+            sourceX,
+            sourceY,
+            sourceW,
+            sourceH,
+            -piece.size / 2,
+            -piece.size / 2,
+            piece.size,
+            piece.size
+          );
+        } else {
+          ctx.fillStyle = "#ddd";
+          ctx.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size);
+        }
+
+        ctx.restore();
+      }
     }
 
     function roundRect(x, y, w, h, r) {
@@ -971,7 +1026,9 @@
       drawVisitorCounter();
       drawSmoke();
 
-      for (const face of faces) drawFace(face);
+      for (const target of pearlTargets) drawPearlTarget(target);
+      drawPearlPieces();
+
       for (const ball of balls) {
         if (state.fireMode) drawFireball(ball);
         else drawBeachBall(ball);

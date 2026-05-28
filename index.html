@@ -63,12 +63,14 @@
       nextBallScore: 5,
       nextFaceScore: 30,
       nextFaceSpawnTimer: 0,
+      smileStreak: 0,
       message: '',
       messageTimer: 0,
-      smileStreak: 0,
-      wowTimer: 0,
-      wowSpin: 0,
-      poopRainTriggered: false
+      streakWowTimer: 0,
+      milestoneWowTimer: 0,
+      milestoneWowSpin: 0,
+      did25Wow: false,
+      did35Poops: false
     };
 
     try {
@@ -128,15 +130,14 @@
         vx: direction * (170 + Math.random() * 240),
         vy: 60 + Math.random() * 120,
         spin: Math.random() * Math.PI * 2,
-        spinVelocity: direction * (2.2 + Math.random() * 4),
-        lastRampId: null
+        spinVelocity: direction * (2.2 + Math.random() * 4)
       };
     }
 
     function createFace() {
+      const scoreboardZone = H * .60;
       const size = 38 + Math.random() * 70;
       const x = 90 + Math.random() * Math.max(1, W - 180);
-      const scoreboardZone = H * .60;
       const y = 90 + Math.random() * Math.max(80, scoreboardZone - 180);
 
       faces.push({
@@ -165,18 +166,23 @@
       state.nextBallScore = 5;
       state.nextFaceScore = 30;
       state.nextFaceSpawnTimer = 0;
+      state.smileStreak = 0;
       state.message = '';
       state.messageTimer = 0;
-      state.smileStreak = 0;
-      state.wowTimer = 0;
-      state.wowSpin = 0;
-      state.poopRainTriggered = false;
-      popTexts = [];
+      state.streakWowTimer = 0;
+      state.milestoneWowTimer = 0;
+      state.milestoneWowSpin = 0;
+      state.did25Wow = false;
+      state.did35Poops = false;
+
       paddle.x = W / 2;
       paddle.velocity = 0;
       paddle.targetX = null;
+
       balls = [createBall(W / 2, H * .25)];
       faces = [];
+      popTexts = [];
+      poops = [];
       hint.textContent = 'USE ARROW KEYS OR DRAG TO CONTROL THE BAR';
     }
 
@@ -188,40 +194,51 @@
       state.messageTimer = .7;
     }
 
-    function scorePoint() {
-      state.score += 1;
+    function trigger25Wow() {
+      state.did25Wow = true;
+      state.milestoneWowTimer = 2.2;
+      state.milestoneWowSpin = Math.PI * 5.5;
+    }
 
-      if (state.score === 25) {
-        state.wowTimer = 2.1;
-        state.wowSpin = Math.PI * 5;
+    function triggerPoopRain() {
+      state.did35Poops = true;
+      for (let i = 0; i < 24; i++) {
+        poops.push({
+          x: Math.random() * W,
+          y: -40 - Math.random() * 620,
+          vy: 190 + Math.random() * 360,
+          size: 17 + Math.random() * 23,
+          alpha: 1,
+          landed: false,
+          wobble: Math.random() * Math.PI * 2
+        });
       }
+    }
 
-      if (state.score >= 35 && !state.poopRainTriggered) {
-        state.poopRainTriggered = true;
-        for (let i = 0; i < 22; i++) {
-          poops.push({
-            x: Math.random() * W,
-            y: -Math.random() * 600,
-            vy: 180 + Math.random() * 340,
-            size: 18 + Math.random() * 24,
-            landed: false,
-            alpha: 1,
-            wobble: Math.random() * Math.PI * 2
-          });
-        }
-      }
+    function checkMilestones() {
+      if (state.score >= 25 && !state.did25Wow) trigger25Wow();
+      if (state.score >= 35 && !state.did35Poops) triggerPoopRain();
+    }
+
+    function addScore(amount = 1) {
+      state.score += amount;
+
       if (state.score > state.best) {
         state.best = state.score;
         try { localStorage.setItem('keepyBest', state.best); } catch (e) {}
       }
+
       while (state.score >= state.nextBallScore) {
         addBall();
         state.nextBallScore += 5;
       }
+
       if (state.score >= state.nextFaceScore) {
         state.nextFaceSpawnTimer = 0;
         state.nextFaceScore += 3;
       }
+
+      checkMilestones();
     }
 
     function updatePaddle(dt) {
@@ -272,81 +289,60 @@
       }
 
       faces = faces.filter(face => face.alpha > 0);
+    }
 
-      
+    function updatePoops(dt) {
+      for (const poop of poops) {
+        if (!poop.landed) {
+          poop.y += poop.vy * dt;
+          poop.x += Math.sin(performance.now() * .002 + poop.wobble) * .8;
+
+          const paddleTop = paddle.y - paddle.h / 2;
+          const hitsBar = poop.y + poop.size * .45 >= paddleTop &&
+            poop.x > paddle.x - paddle.w / 2 &&
+            poop.x < paddle.x + paddle.w / 2;
+
+          if (hitsBar) {
+            poop.landed = true;
+            poop.y = paddleTop - poop.size * .18;
+          }
+        } else {
+          poop.alpha -= dt * .22;
+        }
+      }
+
+      poops = poops.filter(poop => poop.alpha > 0 && poop.y < H + 80);
     }
 
     function hitFace(face) {
+      if (face.fading) return;
+
       face.lit = 1;
       face.fading = true;
-
-      state.score += 1;
       state.smileStreak += 1;
 
-      if (state.score > state.best) {
-        state.best = state.score;
-        try { localStorage.setItem('keepyBest', state.best); } catch (e) {}
-      }
+      addScore(1);
 
       popTexts.push({
         text: 'Pop!',
         x: face.x,
         y: face.y,
         vy: -42,
-        life: 0.7,
+        life: .7,
         alpha: 1
       });
 
       if (state.smileStreak >= 3) {
-        state.wowTimer = 1.25;
+        state.streakWowTimer = 1.25;
         state.smileStreak = 0;
       }
     }
 
-    function bounceOnFace(ball, face) {
+    function touchFace(ball, face) {
       const dx = ball.x - face.x;
       const dy = ball.y - face.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      const radius = face.size + ball.r;
-
-      if (distance >= radius || face.fading) return;
-
-      hitFace(face);
-    }
-
-    function bounceOnRamp(ball, ramp) {
-      const cos = Math.cos(ramp.angle);
-      const sin = Math.sin(ramp.angle);
-      const dx = ball.x - ramp.x;
-      const dy = ball.y - ramp.y;
-      const localX = dx * cos + dy * sin;
-      const localY = -dx * sin + dy * cos;
-      const half = ramp.length / 2;
-
-      const onTop = localX > -half - ball.r * .25 && localX < half + ball.r * .25;
-      const closeToSurface = localY + ball.r > -6 && localY + ball.r < 24;
-      const movingIntoRamp = ball.vy > -80;
-
-      if (!onTop || !closeToSurface || !movingIntoRamp || ball.lastRampId === ramp.id) return;
-
-      const normalX = -sin;
-      const normalY = -cos;
-      const dot = ball.vx * normalX + ball.vy * normalY;
-
-      if (dot < 0) {
-        ball.vx -= 1.65 * dot * normalX;
-        ball.vy -= 1.65 * dot * normalY;
-      }
-
-      ball.vx += Math.sin(ramp.angle) * 360;
-      ball.vy -= 180 + Math.random() * 120;
-      ball.vx = clamp(ball.vx, -950, 950);
-      ball.y -= 8;
-      ball.spinVelocity = ball.vx * .025;
-      ball.lastRampId = ramp.id;
-      setTimeout(() => {
-        if (ball.lastRampId === ramp.id) ball.lastRampId = null;
-      }, 220);
+      if (distance < face.size + ball.r) hitFace(face);
     }
 
     function updateBall(ball, dt) {
@@ -368,7 +364,7 @@
         ball.vy = Math.abs(ball.vy) * .72;
       }
 
-      for (const face of faces) bounceOnFace(ball, face);
+      for (const face of faces) touchFace(ball, face);
 
       const paddleTop = paddle.y - paddle.h / 2;
       const paddleLeft = paddle.x - paddle.w / 2;
@@ -389,8 +385,9 @@
         ball.vx += hitPosition * (320 + Math.random() * 320) + paddle.velocity * .48;
         ball.vx = clamp(ball.vx, -900, 900);
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
+
         state.smileStreak = 0;
-        scorePoint();
+        addScore(1);
       }
     }
 
@@ -399,6 +396,8 @@
 
       updatePaddle(dt);
       updateFaces(dt);
+      updatePoops(dt);
+
       for (const ball of balls) updateBall(ball, dt);
       balls = balls.filter(ball => ball.y - ball.r <= H);
 
@@ -413,34 +412,16 @@
         if (state.messageTimer <= 0) state.message = '';
       }
 
-      if (state.wowTimer > 0) {
-        state.wowTimer -= dt;
-        state.wowSpin *= 0.965;
+      if (state.streakWowTimer > 0) state.streakWowTimer -= dt;
+      if (state.milestoneWowTimer > 0) {
+        state.milestoneWowTimer -= dt;
+        state.milestoneWowSpin *= .965;
       }
-
-      for (const poop of poops) {
-        if (!poop.landed) {
-          poop.y += poop.vy * dt;
-          poop.x += Math.sin(performance.now() * 0.002 + poop.wobble) * 0.8;
-
-          const paddleTop = paddle.y - paddle.h / 2;
-          const touchingBar = poop.y + poop.size * .45 >= paddleTop && poop.x > paddle.x - paddle.w / 2 && poop.x < paddle.x + paddle.w / 2;
-
-          if (touchingBar) {
-            poop.landed = true;
-            poop.y = paddleTop - poop.size * .18;
-          }
-        } else {
-          poop.alpha -= dt * 0.22;
-        }
-      }
-
-      poops = poops.filter(poop => poop.alpha > 0);
 
       for (const pop of popTexts) {
         pop.life -= dt;
         pop.y += pop.vy * dt;
-        pop.alpha = Math.max(0, pop.life / 0.7);
+        pop.alpha = Math.max(0, pop.life / .7);
       }
       popTexts = popTexts.filter(pop => pop.life > 0);
     }
@@ -508,7 +489,7 @@
 
     function drawFace(face) {
       const glow = face.lit;
-      const color = glow > 0.02
+      const color = glow > .02
         ? `rgb(${Math.floor(140 + glow * 115)}, ${Math.floor(120 + glow * 95)}, 0)`
         : 'rgb(137,117,40)';
 
@@ -522,19 +503,19 @@
       ctx.arc(0, 0, face.size, 0, Math.PI * 2);
       ctx.fill();
 
-      // eyes
       ctx.fillStyle = '#000';
       ctx.beginPath();
       ctx.ellipse(-face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
       ctx.ellipse(face.size * .30, -face.size * .22, face.size * .08, face.size * .22, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (glow > 0.02) {
+      if (glow > .02) {
         ctx.beginPath();
         ctx.arc(0, face.size * .12, face.size * .52, 0, Math.PI, false);
         ctx.lineTo(face.size * .52, face.size * .12);
         ctx.fill();
       } else {
+        ctx.strokeStyle = '#000';
         ctx.lineWidth = Math.max(4, face.size * .08);
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -551,6 +532,19 @@
       ctx.fillRect(paddle.x - paddle.w / 2, paddle.y - paddle.h / 2, paddle.w, paddle.h);
     }
 
+    function drawPoops() {
+      for (const poop of poops) {
+        ctx.save();
+        ctx.globalAlpha = poop.alpha;
+        ctx.translate(poop.x, poop.y);
+        ctx.font = `${poop.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('💩', 0, 0);
+        ctx.restore();
+      }
+    }
+
     function drawPopTexts() {
       for (const pop of popTexts) {
         ctx.save();
@@ -564,10 +558,40 @@
       }
     }
 
-    function drawWow() {
-      if (state.wowTimer <= 0) return;
+    function drawStreakWow() {
+      if (state.streakWowTimer <= 0) return;
+      const alpha = Math.min(1, state.streakWowTimer / .55);
+      const scale = 1 + (1.25 - state.streakWowTimer) * .18;
 
-      const alpha = Math
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(W / 2, H * .34);
+      ctx.scale(scale, scale);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(65,184,188,.92)';
+      ctx.font = `900 ${Math.min(W * .22, 130)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText('WOW!', 0, 0);
+      ctx.restore();
+    }
+
+    function drawMilestoneWow() {
+      if (state.milestoneWowTimer <= 0) return;
+      const alpha = Math.min(1, state.milestoneWowTimer / 1.1);
+      const scale = 1 + (2.2 - state.milestoneWowTimer) * .12;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(W / 2, H * .34);
+      ctx.rotate(state.milestoneWowSpin);
+      ctx.scale(scale, scale);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(65,184,188,.92)';
+      ctx.font = `900 ${Math.min(W * .22, 130)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText('WOW!', 0, 0);
+      ctx.restore();
+    }
 
     function drawMessage() {
       if (!state.message) return;
@@ -586,8 +610,10 @@
       for (const face of faces) drawFace(face);
       for (const ball of balls) drawBeachBall(ball);
       drawPaddle();
+      drawPoops();
       drawPopTexts();
-      drawWow();
+      drawStreakWow();
+      drawMilestoneWow();
       drawMessage();
     }
 

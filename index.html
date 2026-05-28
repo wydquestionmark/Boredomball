@@ -44,6 +44,11 @@
     const ctx = canvas.getContext('2d');
     const hint = document.getElementById('hint');
 
+    // Save your troll image in the same folder as this index.html file.
+    // The filename must be exactly: troll.png
+    const trollImg = new Image();
+    trollImg.src = 'troll.png';
+
     let W = window.innerWidth || 390;
     let H = window.innerHeight || 700;
     let dpr = 1;
@@ -239,7 +244,7 @@
     function spawnTrollHeads() {
       const count = 2 + Math.floor(Math.random() * 4);
       for (let i = 0; i < count; i++) {
-        const size = 42 + Math.random() * 72;
+        const size = 28 + Math.random() * 34;
         trollHeads.push({
           x: Math.random() * W,
           y: -size - Math.random() * 260,
@@ -739,68 +744,33 @@
 
     function drawTrollHead(head) {
       if (head.delay > 0) return;
-      const s = head.size / 100;
+
+      const aspect = 0.74;
+      const width = head.size * 1.8;
+      const height = width * aspect;
+
       ctx.save();
       ctx.globalAlpha = head.alpha;
       ctx.translate(head.x, head.y);
       ctx.rotate(head.rotation);
-      ctx.scale(s, s);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.moveTo(-88, -18);
-      ctx.bezierCurveTo(-78, -57, -30, -72, 35, -70);
-      ctx.bezierCurveTo(78, -69, 95, -44, 101, -11);
-      ctx.bezierCurveTo(113, 15, 91, 37, 68, 42);
-      ctx.bezierCurveTo(44, 68, -22, 89, -67, 69);
-      ctx.bezierCurveTo(-92, 57, -86, 22, -91, 7);
-      ctx.bezierCurveTo(-105, -3, -105, -14, -88, -18);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#050505';
-      ctx.beginPath();
-      ctx.moveTo(-67, 4);
-      ctx.bezierCurveTo(-35, 35, 35, 35, 74, -4);
-      ctx.bezierCurveTo(66, 51, -36, 64, -68, 13);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(-55, 9);
-      ctx.bezierCurveTo(-23, 22, 35, 22, 63, 2);
-      ctx.lineTo(57, 22);
-      ctx.bezierCurveTo(22, 40, -28, 36, -58, 21);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      for (let x = -42; x <= 45; x += 17) {
+
+      if (trollImg.complete && trollImg.naturalWidth > 0) {
+        ctx.drawImage(trollImg, -width / 2, -height / 2, width, height);
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(x, 11);
-        ctx.lineTo(x + 5, 33);
+        ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
+        ctx.fillStyle = '#111';
+        ctx.font = `${head.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(':)', 0, 0);
       }
-      ctx.fillStyle = '#111';
-      ctx.beginPath();
-      ctx.ellipse(-34, -29, 20, 8, .16, 0, Math.PI * 2);
-      ctx.ellipse(35, -29, 20, 8, -.16, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(-25, -30, 3.5, 0, Math.PI * 2);
-      ctx.arc(44, -30, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#111';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(-4, -19);
-      ctx.bezierCurveTo(-18, -2, -11, 9, 7, 3);
-      ctx.stroke();
+
       ctx.restore();
     }
 

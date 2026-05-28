@@ -129,7 +129,8 @@
     function createFace() {
       const size = 38 + Math.random() * 70;
       const x = 90 + Math.random() * Math.max(1, W - 180);
-      const y = H * (.18 + Math.random() * .46);
+      const scoreboardZone = H * .60;
+      const y = 90 + Math.random() * Math.max(80, scoreboardZone - 180);
 
       faces.push({
         id: Math.random().toString(36).slice(2),

@@ -153,10 +153,14 @@
       const speed = (70 + Math.random() * 130) * (fromLeft ? 1 : -1);
 
       seagulls.push({
-        x: fromLeft ? -90 * size : W + 90 * size,
+        x: fromLeft ? -120 * size : W + 120 * size,
         y,
         size,
         vx: speed,
+        vy: 0,
+        rotation: 0,
+        rotationSpeed: 0,
+        hit: false,
         flap: Math.random() * Math.PI * 2,
         bob: Math.random() * Math.PI * 2
       });
@@ -169,12 +173,47 @@
       if (state.nextSeagullTime <= 0) spawnSeagull();
 
       for (const gull of seagulls) {
-        gull.x += gull.vx * dt;
-        gull.flap += dt * 7;
-        gull.bob += dt * 2;
+        if (gull.hit) {
+          gull.vy += 920 * dt;
+          gull.y += gull.vy * dt;
+          gull.x += gull.vx * 0.35 * dt;
+          gull.rotation += gull.rotationSpeed * dt;
+          gull.flap += dt * 18;
+        } else {
+          gull.x += gull.vx * dt;
+          gull.flap += dt * 9;
+          gull.bob += dt * 2;
+        }
       }
 
-      seagulls = seagulls.filter(gull => gull.x > -160 * gull.size && gull.x < W + 160 * gull.size);
+      seagulls = seagulls.filter(gull => {
+        if (gull.hit) return gull.y < H + 180 * gull.size;
+        return gull.x > -190 * gull.size && gull.x < W + 190 * gull.size;
+      });
+    }
+
+    function hitBird(gull, ball) {
+      gull.hit = true;
+      gull.vy = -260;
+      gull.vx += ball.vx * 0.18;
+      gull.rotationSpeed = (ball.vx > 0 ? 1 : -1) * (3 + Math.random() * 5);
+      ball.vy = -Math.abs(ball.vy) * 0.75;
+      ball.vx += (ball.x - gull.x) * 2.2;
+      state.message = 'BONK';
+      state.messageTimer = 0.45;
+    }
+
+    function checkBirdHits(ball) {
+      for (const gull of seagulls) {
+        if (gull.hit) continue;
+        const rx = 58 * gull.size + ball.r;
+        const ry = 38 * gull.size + ball.r;
+        const dx = ball.x - gull.x;
+        const dy = ball.y - gull.y;
+        if ((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) < 1) {
+          hitBird(gull, ball);
+        }
+      }
     }
 
     function scorePoint() {
@@ -255,6 +294,8 @@
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
         scorePoint();
       }
+
+      checkBirdHits(ball);
     }
 
     function update(dt) {
@@ -333,31 +374,89 @@
     }
 
     function drawSeagull(gull) {
-      const wingLift = Math.sin(gull.flap) * 9 * gull.size;
-      const bobY = Math.sin(gull.bob) * 4 * gull.size;
+      const flap = Math.sin(gull.flap);
+      const bobY = gull.hit ? 0 : Math.sin(gull.bob) * 4 * gull.size;
       const facing = gull.vx > 0 ? 1 : -1;
+      const s = gull.size;
 
       ctx.save();
       ctx.translate(gull.x, gull.y + bobY);
-      ctx.scale(facing * gull.size, gull.size);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.scale(facing * s, s);
+      ctx.rotate(gull.rotation);
 
-      ctx.strokeStyle = 'rgba(30,30,30,.72)';
-      ctx.lineWidth = 3;
+      // Body, shaped like the uploaded black bird reference.
+      ctx.fillStyle = '#050505';
       ctx.beginPath();
-      ctx.moveTo(-26, 0);
-      ctx.quadraticCurveTo(-10, -18 - wingLift, 0, 0);
-      ctx.quadraticCurveTo(10, -18 + wingLift, 26, 0);
-      ctx.stroke();
+      ctx.moveTo(-72, -2);   // beak tip
+      ctx.lineTo(-47, -12);
+      ctx.lineTo(-22, -20);
+      ctx.lineTo(-4, -4);
+      ctx.lineTo(24, 13);
+      ctx.lineTo(55, 29);
+      ctx.lineTo(28, 35);
+      ctx.lineTo(-6, 34);
+      ctx.lineTo(-32, 23);
+      ctx.lineTo(-49, 0);
+      ctx.closePath();
+      ctx.fill();
 
-      ctx.strokeStyle = 'rgba(255,255,255,.9)';
-      ctx.lineWidth = 1.2;
+      // Beak.
+      ctx.fillStyle = '#191919';
       ctx.beginPath();
-      ctx.moveTo(-22, -1);
-      ctx.quadraticCurveTo(-9, -12 - wingLift, 0, 0);
-      ctx.quadraticCurveTo(9, -12 + wingLift, 22, -1);
-      ctx.stroke();
+      ctx.moveTo(-72, -2);
+      ctx.lineTo(-46, -10);
+      ctx.lineTo(-48, 6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Back wing.
+      ctx.fillStyle = '#1b1b1b';
+      ctx.beginPath();
+      ctx.moveTo(-5, -2);
+      ctx.lineTo(18, -36 - flap * 7);
+      ctx.lineTo(54, -48 - flap * 11);
+      ctx.lineTo(92, -46 - flap * 8);
+      ctx.lineTo(110, -62 - flap * 8);
+      ctx.lineTo(106, -32 - flap * 5);
+      ctx.lineTo(118, -34);
+      ctx.lineTo(101, -10);
+      ctx.lineTo(137, -12);
+      ctx.lineTo(121, 17);
+      ctx.lineTo(80, 22);
+      ctx.closePath();
+      ctx.fill();
+
+      // Front wing.
+      ctx.fillStyle = '#222';
+      ctx.beginPath();
+      ctx.moveTo(-3, -1);
+      ctx.lineTo(36, -24 + flap * 5);
+      ctx.lineTo(90, -12 + flap * 12);
+      ctx.lineTo(139, -18 + flap * 10);
+      ctx.lineTo(113, 26 + flap * 3);
+      ctx.lineTo(92, 30);
+      ctx.lineTo(103, 43);
+      ctx.lineTo(72, 36);
+      ctx.lineTo(85, 58);
+      ctx.lineTo(40, 39);
+      ctx.lineTo(57, 64);
+      ctx.lineTo(16, 44);
+      ctx.closePath();
+      ctx.fill();
+
+      // Eye whites.
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(-38, -9, 7, 0, Math.PI * 2);
+      ctx.arc(-19, 2, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pupils.
+      ctx.fillStyle = '#050505';
+      ctx.beginPath();
+      ctx.arc(-38, -9, 3.2, 0, Math.PI * 2);
+      ctx.arc(-19, 2, 3.2, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.restore();
     }
@@ -437,3 +536,4 @@
   </script>
 </body>
 </html>
+

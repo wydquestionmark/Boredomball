@@ -51,6 +51,7 @@
     let faces = [];
     let popTexts = [];
     let poops = [];
+    let smokePuffs = [];
 
     const keys = { left: false, right: false };
 
@@ -190,6 +191,7 @@
       faces = [];
       popTexts = [];
       poops = [];
+      smokePuffs = [];
       hint.textContent = 'USE ARROW KEYS OR DRAG TO CONTROL THE BAR';
     }
 
@@ -306,6 +308,38 @@
       faces = faces.filter(face => face.alpha > 0);
     }
 
+    function updateSmoke(dt) {
+      if (state.fireMode) {
+        for (const ball of balls) {
+          const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+          if (speed > 80) {
+            const angle = Math.atan2(ball.vy, ball.vx) + Math.PI;
+            smokePuffs.push({
+              x: ball.x + Math.cos(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
+              y: ball.y + Math.sin(angle) * ball.r * .8 + (Math.random() - .5) * ball.r * .5,
+              vx: Math.cos(angle) * (20 + Math.random() * 60) + (Math.random() - .5) * 24,
+              vy: Math.sin(angle) * (20 + Math.random() * 60) - 18 - Math.random() * 18,
+              r: ball.r * (.22 + Math.random() * .26),
+              life: .75 + Math.random() * .45,
+              maxLife: 1.2,
+              alpha: .26 + Math.random() * .22
+            });
+          }
+        }
+      }
+
+      for (const puff of smokePuffs) {
+        puff.life -= dt;
+        puff.x += puff.vx * dt;
+        puff.y += puff.vy * dt;
+        puff.vx *= Math.pow(.985, dt * 60);
+        puff.vy -= 6 * dt;
+        puff.r += 12 * dt;
+      }
+
+      smokePuffs = smokePuffs.filter(puff => puff.life > 0);
+    }
+
     function updatePoops(dt) {
       for (const poop of poops) {
         if (!poop.landed) {
@@ -412,6 +446,7 @@
       updatePaddle(dt);
       updateFaces(dt);
       updatePoops(dt);
+      updateSmoke(dt);
 
       for (const ball of balls) updateBall(ball, dt);
       balls = balls.filter(ball => ball.y - ball.r <= H);
@@ -451,78 +486,119 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = mainColor;
-      ctx.font = `900 ${Math.min(W * .24, H * .20)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText(String(state.score).padStart(3, '0'), W / 2, H * .48);
+      ctx.font = `900 ${Math.min(W * .34, H * .28)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(String(state.score).padStart(3, '0'), W / 2, H * .47);
 
-      ctx.font = `900 ${Math.min(W * .055, 34)}px Impact, Arial Black, sans-serif`;
+      ctx.font = `900 ${Math.min(W * .075, 46)}px Impact, Arial Black, sans-serif`;
       ctx.fillStyle = bestColor;
-      ctx.fillText('BEST ' + String(state.best).padStart(3, '0'), W / 2, H * .59);
+      ctx.fillText('BEST ' + String(state.best).padStart(3, '0'), W / 2, H * .64);
       ctx.restore();
+    }
+
+    function drawSmoke() {
+      for (const puff of smokePuffs) {
+        const alpha = puff.alpha * Math.max(0, puff.life / puff.maxLife);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        const grad = ctx.createRadialGradient(puff.x, puff.y, 1, puff.x, puff.y, puff.r);
+        grad.addColorStop(0, 'rgba(65,65,65,.55)');
+        grad.addColorStop(.55, 'rgba(95,95,95,.22)');
+        grad.addColorStop(1, 'rgba(120,120,120,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(puff.x, puff.y, puff.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     function drawFireball(ball) {
       const x = ball.x, y = ball.y, r = ball.r;
-      const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-      const travelAngle = Math.atan2(ball.vy, ball.vx);
-      const tailAngle = travelAngle + Math.PI;
-      const flameLength = r * (1.65 + Math.min(speed / 700, 1.35));
       const time = performance.now() * 0.006;
 
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(tailAngle);
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.rotate(ball.spin);
 
-      for (let i = 0; i < 12; i++) {
-        const wave = Math.sin(time + i * 1.7) * r * 0.18;
-        const spread = (i - 5.5) * r * 0.13;
-        const len = flameLength * (0.55 + Math.random() * 0.55);
-        const width = r * (0.22 + Math.random() * 0.25);
+      // Soot-covered singed beachball center.
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.clip();
 
-        const grad = ctx.createRadialGradient(-len * 0.42, spread + wave, 1, -len * 0.5, spread + wave, len);
-        grad.addColorStop(0, 'rgba(255,255,220,.98)');
-        grad.addColorStop(.18, 'rgba(255,220,60,.9)');
-        grad.addColorStop(.46, 'rgba(255,95,0,.65)');
-        grad.addColorStop(.78, 'rgba(190,0,0,.28)');
-        grad.addColorStop(1, 'rgba(80,0,0,0)');
+      const panels = [
+        ['#4b3d17', -Math.PI * .95, -Math.PI * .28],
+        ['#b9b4a7', -Math.PI * .28, Math.PI * .18],
+        ['#4c1512', Math.PI * .18, Math.PI * .82],
+        ['#6a6861', Math.PI * .82, Math.PI * 1.35],
+        ['#123d4f', Math.PI * 1.35, Math.PI * 1.75]
+      ];
 
-        ctx.fillStyle = grad;
+      for (const [color, start, end] of panels) {
+        ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.moveTo(-r * 0.18, spread - width * 0.45);
-        ctx.quadraticCurveTo(-len * 0.45, spread - width + wave, -len, spread + wave);
-        ctx.quadraticCurveTo(-len * 0.45, spread + width + wave, -r * 0.18, spread + width * 0.45);
+        ctx.moveTo(0, -r * .72);
+        ctx.arc(0, 0, r, start, end);
         ctx.closePath();
+        ctx.fill();
+      }
+
+      const soot = ctx.createRadialGradient(-r * .2, -r * .25, r * .1, 0, 0, r);
+      soot.addColorStop(0, 'rgba(255,210,120,.22)');
+      soot.addColorStop(.35, 'rgba(40,30,25,.34)');
+      soot.addColorStop(.72, 'rgba(10,8,7,.64)');
+      soot.addColorStop(1, 'rgba(0,0,0,.88)');
+      ctx.fillStyle = soot;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Scorched blotches.
+      ctx.fillStyle = 'rgba(0,0,0,.38)';
+      for (let i = 0; i < 9; i++) {
+        const a = i * 1.7 + time * .15;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * r * .45, Math.sin(a * 1.3) * r * .42, r * .12, r * .07, a, 0, Math.PI * 2);
         ctx.fill();
       }
 
       ctx.restore();
 
+      // Glowing fiery edge only.
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(ball.spin);
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalCompositeOperation = 'lighter';
 
-      const core = ctx.createRadialGradient(-r * .25, -r * .3, r * .08, 0, 0, r);
-      core.addColorStop(0, '#fff8b8');
-      core.addColorStop(.22, '#ffd23c');
-      core.addColorStop(.55, '#ff6b00');
-      core.addColorStop(.82, '#b51600');
-      core.addColorStop(1, '#240000');
-
-      ctx.fillStyle = core;
+      const pulse = .75 + Math.sin(time * 2.3) * .12;
+      const glow = ctx.createRadialGradient(0, 0, r * .72, 0, 0, r * 1.28 * pulse);
+      glow.addColorStop(0, 'rgba(255,120,0,0)');
+      glow.addColorStop(.55, 'rgba(255,145,0,.16)');
+      glow.addColorStop(.78, 'rgba(255,60,0,.48)');
+      glow.addColorStop(1, 'rgba(255,0,0,0)');
+      ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.arc(0, 0, r * 1.32, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 5; i++) {
-        const a = time * 0.8 + i * 1.25;
-        ctx.fillStyle = i % 2 ? 'rgba(255,230,80,.35)' : 'rgba(255,90,0,.34)';
-        ctx.beginPath();
-        ctx.arc(Math.cos(a) * r * .35, Math.sin(a * 1.3) * r * .35, r * (.18 + Math.random() * .08), 0, Math.PI * 2);
-        ctx.fill();
+      ctx.lineWidth = Math.max(3, r * .11);
+      ctx.strokeStyle = 'rgba(255,170,30,.82)';
+      ctx.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const a = (i / 40) * Math.PI * 2;
+        const wobble = Math.sin(a * 7 + time * 4) * r * .035;
+        const rr = r * 1.02 + wobble;
+        const px = Math.cos(a) * rr;
+        const py = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       }
+      ctx.closePath();
+      ctx.stroke();
 
+      ctx.lineWidth = Math.max(1.5, r * .045);
+      ctx.strokeStyle = 'rgba(255,245,150,.9)';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * .98, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.restore();
     }
 
@@ -704,6 +780,7 @@
     function draw() {
       ctx.clearRect(0, 0, W, H);
       drawScore();
+      drawSmoke();
       for (const face of faces) drawFace(face);
       for (const ball of balls) {
         if (state.fireMode) drawFireball(ball);

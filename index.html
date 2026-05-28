@@ -74,6 +74,8 @@
       h: 6,
       speed: 720,
       vx: 0,
+      momentum: 0,
+      friction: 0.9,
       targetX: null,
     };
 
@@ -117,15 +119,35 @@
 
     function updatePaddle(dt) {
       let oldX = paddle.x;
+
       if (paddle.targetX !== null) {
-        paddle.x += (paddle.targetX - paddle.x) * Math.min(1, dt * 18);
+        const desired = (paddle.targetX - paddle.x) * 9;
+        paddle.momentum += (desired - paddle.momentum) * Math.min(1, dt * 7);
       } else {
         let dir = 0;
         if (keys.left) dir -= 1;
         if (keys.right) dir += 1;
-        paddle.x += dir * paddle.speed * dt;
+
+        const accel = dir * paddle.speed * 2.2;
+        paddle.momentum += accel * dt;
+
+        if (dir === 0) {
+          paddle.momentum *= Math.pow(paddle.friction, dt * 60);
+        }
       }
-      paddle.x = clamp(paddle.x, paddle.w / 2, W - paddle.w / 2);
+
+      paddle.momentum = clamp(paddle.momentum, -880, 880);
+      paddle.x += paddle.momentum * dt;
+
+      if (paddle.x < paddle.w / 2) {
+        paddle.x = paddle.w / 2;
+        paddle.momentum *= -0.18;
+      }
+      if (paddle.x > W - paddle.w / 2) {
+        paddle.x = W - paddle.w / 2;
+        paddle.momentum *= -0.18;
+      }
+
       paddle.vx = (paddle.x - oldX) / Math.max(dt, 0.0001);
     }
 
@@ -159,10 +181,11 @@
       if (comingDown && crossesPaddle && insidePaddle) {
         const hit = (ball.x - paddle.x) / (paddle.w / 2);
         ball.y = paddleTop - ball.r;
-        ball.vy = -Math.max(760, Math.abs(ball.vy) * 0.92);
-        ball.vx += hit * 360 + paddle.vx * 0.38;
+        const randomBounce = 720 + Math.random() * 420;
+        ball.vy = -Math.max(randomBounce, Math.abs(ball.vy) * (0.82 + Math.random() * 0.22));
+        ball.vx += hit * (260 + Math.random() * 220) + paddle.vx * 0.42;
         ball.vx = clamp(ball.vx, -720, 720);
-        ball.spinSpeed = ball.vx * 0.018;
+        ball.spinSpeed = ball.vx * (0.012 + Math.random() * 0.02);
         state.score++;
         if (state.score > state.best) {
           state.best = state.score;

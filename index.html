@@ -3,37 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Boredomball</title>
+  <title>Keepy Uppy</title>
   <style>
     * { box-sizing: border-box; }
-
     html, body {
       margin: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #000;
-      color: #ddd;
+      background: #fff;
+      color: #73c7ca;
       font-family: Impact, Haettenschweiler, 'Arial Black', sans-serif;
-      touch-action: manipulation;
+      touch-action: none;
       user-select: none;
     }
-
     #game {
       width: 100vw;
       height: 100dvh;
       display: block;
-      background: #000;
+      background: #fff;
     }
-
     #hint {
       position: fixed;
       left: 50%;
-      bottom: 22px;
+      bottom: 30px;
       transform: translateX(-50%);
-      color: rgba(255,255,255,.45);
-      font: 14px Arial, sans-serif;
-      letter-spacing: .08em;
+      color: rgba(65, 184, 188, .72);
+      font: 900 18px Impact, Haettenschweiler, 'Arial Black', sans-serif;
+      letter-spacing: .06em;
       text-align: center;
       pointer-events: none;
     }
@@ -41,47 +38,43 @@
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hint">TAP / SPACE TO SET THE HOOP</div>
+  <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const hint = document.getElementById('hint');
 
-    let W = 0;
-    let H = 0;
-    let dpr = 1;
+    let W = 0, H = 0, dpr = 1;
+    const keys = { left: false, right: false };
 
     const state = {
       score: 0,
-      round: 'aiming', // aiming, settling, result
-      message: '',
-      messageTimer: 0,
+      best: Number(localStorage.getItem('keepyBest') || 0),
+      running: true,
       lastTime: 0,
-      gravity: 2200,
+      message: '',
+      gravity: 1320,
     };
 
     const ball = {
       x: 0,
       y: 0,
+      vx: 150,
       vy: 0,
-      radius: 18,
-      bounceTop: 70,
-      bounceBottom: 0,
-      floorDamping: 0.985,
-      settlingDamping: 0.955,
-      minVelocity: 140,
+      r: 46,
+      spin: 0,
+      spinSpeed: 0,
     };
 
-    const hoop = {
+    const paddle = {
       x: 0,
       y: 0,
-      width: 94,
-      rimHeight: 18,
-      netLength: 78,
-      dir: 1,
-      speed: 245,
-      targetSpeed: 245,
+      w: 244,
+      h: 6,
+      speed: 720,
+      vx: 0,
+      targetX: null,
     };
 
     function resize() {
@@ -94,212 +87,179 @@
       canvas.style.height = H + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ball.x = W / 2;
-      ball.radius = Math.max(13, Math.min(20, W * 0.035));
-      ball.bounceTop = Math.max(42, H * 0.065);
-      ball.bounceBottom = H - ball.radius - 22;
-
-      hoop.y = H * 0.74;
-      hoop.width = Math.max(74, Math.min(104, W * 0.23));
-      hoop.netLength = Math.max(58, Math.min(82, H * 0.095));
-      if (!hoop.x) hoop.x = W / 2;
+      ball.r = Math.max(30, Math.min(54, W * 0.045));
+      paddle.w = Math.max(150, Math.min(260, W * 0.24));
+      paddle.h = Math.max(5, Math.min(8, H * 0.007));
+      paddle.y = H * 0.83;
+      if (!paddle.x) paddle.x = W / 2;
+      if (!ball.x) resetGame();
     }
 
-    function padScore(n) {
-      return String(n).padStart(3, '0');
-    }
-
-    function launchBall(fullPower = true) {
-      ball.y = ball.bounceBottom;
-      const travel = ball.bounceBottom - ball.bounceTop;
-      ball.vy = -Math.sqrt(2 * state.gravity * travel) * (fullPower ? 1 : 0.72);
-    }
-
-    function startSettle() {
-      if (state.round !== 'aiming') return;
-      state.round = 'settling';
-      hoop.targetSpeed = 0;
-      hint.style.opacity = 0;
-    }
-
-    function resetRound() {
-      state.round = 'aiming';
+    function resetGame() {
+      state.score = 0;
+      state.running = true;
       state.message = '';
-      state.messageTimer = 0;
-      hoop.targetSpeed = 245;
-      hoop.speed = 245;
-      hoop.dir = Math.random() > 0.5 ? 1 : -1;
-      hoop.x = W / 2;
-      launchBall(true);
-      hint.style.opacity = 1;
+      paddle.x = W / 2;
+      paddle.vx = 0;
+      paddle.targetX = null;
+      ball.x = W / 2;
+      ball.y = H * 0.25;
+      ball.vx = Math.random() > 0.5 ? 150 : -150;
+      ball.vy = 120;
+      ball.spin = 0;
+      ball.spinSpeed = ball.vx * 0.012;
+      hint.textContent = 'USE ARROW KEYS OR DRAG TO CONTROL THE BAR';
     }
 
-    function checkBasket() {
-      const rimY = hoop.y;
-      const rimLeft = hoop.x - hoop.width / 2;
-      const rimRight = hoop.x + hoop.width / 2;
-      const ballBottom = ball.y + ball.radius;
-      const ballCenterInside = ball.x > rimLeft + 10 && ball.x < rimRight - 10;
-      const descending = ball.vy > 0;
-      const passingThroughRim = ballBottom >= rimY - 8 && ballBottom <= rimY + 24;
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
 
-      if (ballCenterInside && descending && passingThroughRim) {
-        state.score++;
-        state.message = 'BUCKET';
+    function updatePaddle(dt) {
+      let oldX = paddle.x;
+      if (paddle.targetX !== null) {
+        paddle.x += (paddle.targetX - paddle.x) * Math.min(1, dt * 18);
       } else {
-        state.message = 'MISS';
+        let dir = 0;
+        if (keys.left) dir -= 1;
+        if (keys.right) dir += 1;
+        paddle.x += dir * paddle.speed * dt;
       }
-
-      state.round = 'result';
-      state.messageTimer = 1.15;
+      paddle.x = clamp(paddle.x, paddle.w / 2, W - paddle.w / 2);
+      paddle.vx = (paddle.x - oldX) / Math.max(dt, 0.0001);
     }
 
     function updateBall(dt) {
       ball.vy += state.gravity * dt;
+      ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
+      ball.spin += ball.spinSpeed * dt;
 
-      if (ball.y > ball.bounceBottom) {
-        ball.y = ball.bounceBottom;
+      if (ball.x - ball.r < 0) {
+        ball.x = ball.r;
+        ball.vx = Math.abs(ball.vx) * 0.92;
+      }
+      if (ball.x + ball.r > W) {
+        ball.x = W - ball.r;
+        ball.vx = -Math.abs(ball.vx) * 0.92;
+      }
+      if (ball.y - ball.r < 0) {
+        ball.y = ball.r;
+        ball.vy = Math.abs(ball.vy) * 0.72;
+      }
 
-        if (state.round === 'settling') {
-          ball.vy = -Math.abs(ball.vy) * ball.settlingDamping;
-        } else {
-          ball.vy = -Math.abs(ball.vy) * ball.floorDamping;
+      const paddleTop = paddle.y - paddle.h / 2;
+      const paddleLeft = paddle.x - paddle.w / 2;
+      const paddleRight = paddle.x + paddle.w / 2;
+      const ballBottom = ball.y + ball.r;
+      const comingDown = ball.vy > 0;
+      const crossesPaddle = ballBottom >= paddleTop && ballBottom <= paddleTop + 28;
+      const insidePaddle = ball.x >= paddleLeft - ball.r * 0.25 && ball.x <= paddleRight + ball.r * 0.25;
+
+      if (comingDown && crossesPaddle && insidePaddle) {
+        const hit = (ball.x - paddle.x) / (paddle.w / 2);
+        ball.y = paddleTop - ball.r;
+        ball.vy = -Math.max(760, Math.abs(ball.vy) * 0.92);
+        ball.vx += hit * 360 + paddle.vx * 0.38;
+        ball.vx = clamp(ball.vx, -720, 720);
+        ball.spinSpeed = ball.vx * 0.018;
+        state.score++;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem('keepyBest', state.best);
         }
       }
 
-      if (ball.y < ball.bounceTop) {
-        ball.y = ball.bounceTop;
-        ball.vy = Math.abs(ball.vy) * 0.985;
+      if (ball.y - ball.r > H) {
+        state.running = false;
+        state.message = 'GAME OVER';
+        hint.textContent = 'TAP OR SPACE TO RESTART';
       }
     }
 
     function update(dt) {
-      if (state.round === 'aiming') {
-        hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 7);
-      }
-
-      if (state.round === 'settling') {
-        hoop.speed += (hoop.targetSpeed - hoop.speed) * Math.min(1, dt * 2.25);
-
-        if (Math.abs(hoop.speed) < 4 && Math.abs(ball.vy) < ball.minVelocity && ball.y > hoop.y - 12) {
-          hoop.speed = 0;
-          checkBasket();
-        }
-      }
-
-      if (state.round === 'result') {
-        state.messageTimer -= dt;
-        if (state.messageTimer <= 0) resetRound();
-      }
-
-      hoop.x += hoop.dir * hoop.speed * dt;
-      const margin = hoop.width / 2 + 12;
-      if (hoop.x < margin) {
-        hoop.x = margin;
-        hoop.dir = 1;
-      }
-      if (hoop.x > W - margin) {
-        hoop.x = W - margin;
-        hoop.dir = -1;
-      }
-
+      if (!state.running) return;
+      updatePaddle(dt);
       updateBall(dt);
     }
 
-    function drawTitleBehindBall() {
-      const top = H * 0.29;
+    function drawScore() {
       ctx.save();
-      ctx.globalAlpha = 0.34;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#d9d9d9';
-
-      ctx.font = `900 ${Math.min(W * 0.17, H * 0.14)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText('BASKETS', W / 2, top);
-
-      ctx.font = `900 ${Math.min(W * 0.34, H * 0.29)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText(padScore(state.score), W / 2, top + H * 0.17);
+      ctx.fillStyle = 'rgba(65, 184, 188, .22)';
+      ctx.font = `900 ${Math.min(W * 0.24, H * 0.20)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(String(state.score).padStart(3, '0'), W / 2, H * 0.48);
+      ctx.font = `900 ${Math.min(W * 0.055, 34)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText('BEST ' + String(state.best).padStart(3, '0'), W / 2, H * 0.59);
       ctx.restore();
     }
 
-    function drawBall() {
-      const r = ball.radius;
-      const g = ctx.createRadialGradient(ball.x - r * .35, ball.y - r * .45, r * .1, ball.x, ball.y, r);
-      g.addColorStop(0, '#ffb15f');
-      g.addColorStop(.65, '#f47a22');
-      g.addColorStop(1, '#a93e11');
-      ctx.fillStyle = g;
+    function drawBeachBall() {
+      const x = ball.x, y = ball.y, r = ball.r;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ball.spin);
+
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.clip();
+
+      const panels = [
+        ['#f6c21f', -Math.PI * 0.95, -Math.PI * 0.28],
+        ['#f7f9fb', -Math.PI * 0.28, Math.PI * 0.18],
+        ['#d13b3f', Math.PI * 0.18, Math.PI * 0.82],
+        ['#dfe7ed', Math.PI * 0.82, Math.PI * 1.35],
+        ['#159bd4', Math.PI * 1.35, Math.PI * 1.75],
+      ];
+
+      for (const [color, a1, a2] of panels) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, -r * 0.72);
+        ctx.arc(0, 0, r, a1, a2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      const shine = ctx.createRadialGradient(-r * .35, -r * .45, r * .05, 0, 0, r);
+      shine.addColorStop(0, 'rgba(255,255,255,.65)');
+      shine.addColorStop(.45, 'rgba(255,255,255,.12)');
+      shine.addColorStop(1, 'rgba(0,0,0,.12)');
+      ctx.fillStyle = shine;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = '#2b1b14';
-      ctx.lineWidth = Math.max(1.5, r * .11);
+      ctx.fillStyle = '#f7f7f7';
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y, r * .95, 0, Math.PI * 2);
-      ctx.moveTo(ball.x - r, ball.y);
-      ctx.quadraticCurveTo(ball.x, ball.y + r * .28, ball.x + r, ball.y);
-      ctx.moveTo(ball.x - r, ball.y);
-      ctx.quadraticCurveTo(ball.x, ball.y - r * .28, ball.x + r, ball.y);
-      ctx.moveTo(ball.x, ball.y - r);
-      ctx.quadraticCurveTo(ball.x - r * .38, ball.y, ball.x, ball.y + r);
-      ctx.moveTo(ball.x, ball.y - r);
-      ctx.quadraticCurveTo(ball.x + r * .38, ball.y, ball.x, ball.y + r);
-      ctx.stroke();
+      ctx.arc(0, -r * 0.72, r * 0.13, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
     }
 
-    function drawHoop() {
-      const x = hoop.x;
-      const y = hoop.y;
-      const w = hoop.width;
-      const h = hoop.rimHeight;
-      const net = hoop.netLength;
-
-      ctx.strokeStyle = '#f3f3f3';
-      ctx.lineWidth = 2;
-      for (let i = 0; i <= 7; i++) {
-        const t = i / 7;
-        ctx.beginPath();
-        ctx.moveTo(x - w / 2 + t * w, y + h * .2);
-        ctx.lineTo(x - w * .28 + (1 - t) * w * .56, y + net);
-        ctx.stroke();
-      }
-      for (let i = 0; i <= 7; i++) {
-        const t = i / 7;
-        ctx.beginPath();
-        ctx.moveTo(x + w / 2 - t * w, y + h * .2);
-        ctx.lineTo(x + w * .28 - (1 - t) * w * .56, y + net);
-        ctx.stroke();
-      }
-
-      ctx.strokeStyle = '#e64b2e';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.ellipse(x, y, w / 2, h / 2, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#ff8a69';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(x, y - 1, w / 2 - 5, h / 2 - 3, 0, 0, Math.PI * 2);
-      ctx.stroke();
+    function drawPaddle() {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(paddle.x - paddle.w / 2, paddle.y - paddle.h / 2, paddle.w, paddle.h);
     }
 
     function drawMessage() {
       if (!state.message) return;
+      ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = state.message === 'BUCKET' ? '#fff' : 'rgba(255,255,255,.7)';
-      ctx.font = `900 ${Math.min(W * 0.12, 56)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText(state.message, W / 2, H * 0.62);
+      ctx.fillStyle = 'rgba(0,0,0,.75)';
+      ctx.font = `900 ${Math.min(W * 0.11, 64)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(state.message, W / 2, H * 0.36);
+      ctx.restore();
     }
 
     function draw() {
       ctx.clearRect(0, 0, W, H);
-      drawTitleBehindBall();
-      drawBall();
-      drawHoop();
+      drawScore();
+      drawBeachBall();
+      drawPaddle();
       drawMessage();
     }
 
@@ -313,15 +273,33 @@
 
     window.addEventListener('resize', resize);
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
       if (e.code === 'Space') {
         e.preventDefault();
-        startSettle();
+        if (!state.running) resetGame();
       }
     });
-    window.addEventListener('pointerdown', startSettle);
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    });
+    window.addEventListener('pointerdown', (e) => {
+      if (!state.running) resetGame();
+      paddle.targetX = e.clientX;
+    });
+    window.addEventListener('pointermove', (e) => {
+      paddle.targetX = e.clientX;
+    });
+    window.addEventListener('pointerup', () => {
+      paddle.targetX = null;
+    });
+    window.addEventListener('pointercancel', () => {
+      paddle.targetX = null;
+    });
 
     resize();
-    resetRound();
+    resetGame();
     requestAnimationFrame(loop);
   </script>
 </body>

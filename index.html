@@ -199,7 +199,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
   <div id="mutePrompt">Press M to mute</div>
-  <div id="versionLabel">trollball ver 8.68</div>
+  <div id="versionLabel">trollball ver 9.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -1766,14 +1766,14 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
         const repeatBounceArea =
           previousBounceX !== null &&
-          Math.abs(ball.x - previousBounceX) < Math.max(54, ball.r * 1.35);
+          Math.abs(ball.x - previousBounceX) < Math.max(42, ball.r * 1.15);
 
         const barBarelyMoved =
           previousPaddleX !== null &&
-          Math.abs(paddle.x - previousPaddleX) < Math.max(42, paddle.w * .12);
+          Math.abs(paddle.x - previousPaddleX) < Math.max(28, paddle.w * .08);
 
-        const tooCentered = Math.abs(hitPosition) < .38;
-        const notDiagonalEnough = Math.abs(ball.vx) < 235;
+        const tooCentered = Math.abs(hitPosition) < .26;
+        const notDiagonalEnough = Math.abs(ball.vx) < 160;
         const paddleNotDrivingBall = Math.abs(paddle.velocity) < 170;
 
         const suspiciousVerticalBounce =
@@ -1796,20 +1796,18 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
           return;
         }
 
-        if (ball.vicinityBounceCount >= 2) {
+        if (ball.vicinityBounceCount >= 3) {
           ball.verticalWarning = true;
           ball.redGlitch = 1;
           ball.glitchShake = 1;
           ball.explodeNextBounce = true;
           state.message = "AUSTIN GLITCH DETECTION";
           state.messageTimer = 2.2;
-        } else if (ball.vicinityBounceCount === 1) {
+        } else if (ball.vicinityBounceCount >= 2) {
           ball.verticalWarning = true;
-          ball.redGlitch = .55;
-          ball.glitchShake = .45;
+          ball.redGlitch = .45;
+          ball.glitchShake = .3;
           ball.explodeNextBounce = false;
-          state.message = "DIAGONAL PATH REQUIRED";
-          state.messageTimer = .9;
         } else {
           ball.verticalWarning = false;
           ball.redGlitch = 0;

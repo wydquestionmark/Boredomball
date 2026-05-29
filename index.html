@@ -199,7 +199,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
   <div id="mutePrompt">Press M to mute</div>
-  <div id="versionLabel">trollball ver 12.68</div>
+  <div id="versionLabel">trollball ver 12.72</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -517,6 +517,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     let eggplants = [];
     let smokePuffs = [];
     let trollHeads = [];
+    let tinyGlowingTrollHeads = [];
     let bigfoots = [];
     let skyBalls = [];
     let glitchParticles = [];
@@ -530,8 +531,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     let bombs = [];
     let bombBits = [];
     let miniBeachBalls = [];
-      glowingTrollHeads = [];
-    let glowingTrollHeads = [];
 
     const keys = { left: false, right: false, down: false, up: false };
 
@@ -582,12 +581,11 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       visitorCount: 0,
       gifTimer: 0,
-      nextBombTimer: 1.4,
+      nextBombTimer: 3.8,
       bombSpeedToggle: false,
       nextMiniBeachBallScore: 26,
-      nextGlowingTrollTimer: 4.5,
-      shrinkBarTimer: 0,
-      shrinkBarActive: false
+      nextTinyTrollTimer: 2.4,
+      tinyTrollShrinkTimer: 0
     };
 
     try {
@@ -690,6 +688,21 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       return baseBallRadius() * (2 - progress);
     }
 
+    function basePaddleWidth() {
+      return Math.max(180, Math.min(340, W * .30));
+    }
+
+    function currentPaddleWidth() {
+      const milestoneShrink = state.did50Shrink ? (2 / 3) : 1;
+      const tinyTrollShrink = state.tinyTrollShrinkTimer > 0 ? (1 / 8) : 1;
+      return basePaddleWidth() * milestoneShrink * tinyTrollShrink;
+    }
+
+    function applyPaddleWidth() {
+      paddle.w = currentPaddleWidth();
+      paddle.x = clamp(paddle.x || W / 2, paddle.w / 2, W - paddle.w / 2);
+    }
+
     function sizeCanvas() {
       W = window.innerWidth || 390;
       H = window.innerHeight || 700;
@@ -701,13 +714,9 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       canvas.style.height = H + "px";
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      const baseWidth = Math.max(180, Math.min(340, W * .30));
-      let widthMultiplier = state.did50Shrink ? (2 / 3) : 1;
-      if (state.shrinkBarActive) widthMultiplier *= 1 / 8;
-      paddle.w = baseWidth * widthMultiplier;
+      applyPaddleWidth();
       paddle.h = Math.max(10, Math.min(16, H * .014));
       paddle.y = H * .83;
-      paddle.x = clamp(paddle.x || W / 2, paddle.w / 2, W - paddle.w / 2);
 
       for (const ball of balls) {
         ball.r = currentBallRadius();
@@ -804,12 +813,11 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       state.infernoMode = false;
 
       state.gifTimer = 0;
-      state.nextBombTimer = 1.4;
+      state.nextBombTimer = 3.8;
       state.bombSpeedToggle = false;
       state.nextMiniBeachBallScore = 26;
-      state.nextGlowingTrollTimer = 4.5;
-      state.shrinkBarTimer = 0;
-      state.shrinkBarActive = false;
+      state.nextTinyTrollTimer = 2.4;
+      state.tinyTrollShrinkTimer = 0;
       gifBurst.classList.remove("show");
       gifBurst.removeAttribute("src");
       document.body.classList.remove("inverted");
@@ -832,10 +840,10 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       eggplants = [];
       smokePuffs = [];
       trollHeads = [];
+      tinyGlowingTrollHeads = [];
       bombs = [];
       bombBits = [];
       miniBeachBalls = [];
-      glowingTrollHeads = [];
       bigfoots = [];
       skyBalls = [];
       glitchParticles = [];
@@ -941,8 +949,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       });
 
       // Less frequent than before, but still speeds up gradually as the score rises.
-      const fasterGame = Math.max(2.8, 6.2 - Math.max(0, state.score - 10) * .012);
-      state.nextBombTimer = fasterGame + Math.random() * 4.2;
+      const fasterGame = Math.max(2.8, 6.4 - Math.max(0, state.score - 10) * .014);
+      state.nextBombTimer = fasterGame + Math.random() * 3.2;
     }
 
     function explodeBomb(bomb) {
@@ -982,7 +990,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         state.nextBombTimer -= dt;
         if (state.nextBombTimer <= 0) spawnBomb();
       } else if (state.running && state.score < 10) {
-        state.nextBombTimer = 1.8;
+        state.nextBombTimer = 3.8;
       }
 
       for (const bomb of bombs) {
@@ -1177,74 +1185,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       miniBeachBalls = miniBeachBalls.filter(mini => mini.alpha > 0);
     }
 
-
-    function spawnGlowingTrollHead() {
-      if (!state.running || state.gameOver) return;
-
-      const size = 26 + Math.random() * 24;
-      glowingTrollHeads.push({
-        x: 30 + Math.random() * Math.max(1, W - 60),
-        y: -size - Math.random() * 280,
-        vx: (Math.random() - .5) * 80,
-        vy: 115 + Math.random() * 210,
-        size,
-        rotation: (Math.random() - .5) * .45,
-        rotationSpeed: (Math.random() - .5) * 2.2,
-        alpha: 1,
-        pulse: Math.random() * Math.PI * 2
-      });
-
-      state.nextGlowingTrollTimer = 7.5 + Math.random() * 8.5;
-    }
-
-    function activateShrinkBar() {
-      state.shrinkBarActive = true;
-      state.shrinkBarTimer = 5;
-      barGlow = Math.max(barGlow, 4);
-      state.message = "TINY BAR!";
-      state.messageTimer = .8;
-    }
-
-    function updateGlowingTrollHeads(dt) {
-      if (state.running && !state.gameOver) {
-        state.nextGlowingTrollTimer -= dt;
-        if (state.nextGlowingTrollTimer <= 0) spawnGlowingTrollHead();
-      }
-
-      for (const head of glowingTrollHeads) {
-        head.pulse += dt * 6;
-        head.x += head.vx * dt + Math.sin(head.pulse) * 14 * dt;
-        head.y += head.vy * dt;
-        head.vy += 90 * dt;
-        head.rotation += head.rotationSpeed * dt;
-
-        const paddleTop = paddle.y - paddle.h / 2;
-        const hitsBar =
-          state.running &&
-          head.y + head.size * .35 >= paddleTop &&
-          head.y - head.size * .35 <= paddle.y + paddle.h &&
-          head.x > paddle.x - paddle.w / 2 - head.size * .4 &&
-          head.x < paddle.x + paddle.w / 2 + head.size * .4;
-
-        if (hitsBar) {
-          head.alpha = 0;
-          activateShrinkBar();
-        }
-
-        if (head.y > H + 80) head.alpha -= dt * 1.2;
-      }
-
-      glowingTrollHeads = glowingTrollHeads.filter(head => head.alpha > 0);
-
-      if (state.shrinkBarActive) {
-        state.shrinkBarTimer -= dt;
-        if (state.shrinkBarTimer <= 0) {
-          state.shrinkBarTimer = 0;
-          state.shrinkBarActive = false;
-        }
-      }
-    }
-
     function spawnTrollFlood() {
       for (let i = 0; i < 55; i++) {
         const size = 22 + Math.random() * 42;
@@ -1397,7 +1337,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       if (state.score >= 50 && !state.did50Shrink) {
         state.did50Shrink = true;
         state.fireMode = true;
-        paddle.w *= 2 / 3;
+        applyPaddleWidth();
         state.message = "FIRE MODE";
         state.messageTimer = 1.2;
       }
@@ -1464,11 +1404,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     }
 
     function updatePaddle(dt) {
-      const baseWidth = Math.max(180, Math.min(340, W * .30));
-      let widthMultiplier = state.did50Shrink ? (2 / 3) : 1;
-      if (state.shrinkBarActive) widthMultiplier *= 1 / 8;
-      paddle.w += (baseWidth * widthMultiplier - paddle.w) * Math.min(1, dt * 12);
-
       if (paddle.targetX !== null) {
         const desiredVelocity = (paddle.targetX - paddle.x) * 14;
         paddle.velocity += (desiredVelocity - paddle.velocity) * Math.min(1, dt * 10);
@@ -1675,6 +1610,80 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       }
 
       poops = poops.filter(poop => poop.alpha > 0 && poop.y < H + 80);
+    }
+
+    function spawnTinyGlowingTrollHead() {
+      const size = Math.max(12, Math.min(22, W * (.024 + Math.random() * .012)));
+
+      tinyGlowingTrollHeads.push({
+        x: 24 + Math.random() * Math.max(1, W - 48),
+        y: -size - Math.random() * 260,
+        vx: (Math.random() - .5) * 84,
+        vy: 120 + Math.random() * 210,
+        size,
+        rotation: (Math.random() - .5) * .8,
+        rotationSpeed: (Math.random() - .5) * 4.5,
+        alpha: 1,
+        wobble: Math.random() * Math.PI * 2,
+        hit: false
+      });
+    }
+
+    function triggerTinyTrollShrink(head) {
+      if (head.hit) return;
+
+      head.hit = true;
+      head.alpha = 0;
+      state.tinyTrollShrinkTimer = 5;
+      applyPaddleWidth();
+      barGlow = Math.max(barGlow, 2.8);
+      state.message = "TINY TROLL CURSE";
+      state.messageTimer = 1.1;
+    }
+
+    function updateTinyGlowingTrollHeads(dt) {
+      if (state.running) {
+        state.nextTinyTrollTimer -= dt;
+        if (state.nextTinyTrollTimer <= 0) {
+          spawnTinyGlowingTrollHead();
+          state.nextTinyTrollTimer = 3.8 + Math.random() * 5.8;
+        }
+      }
+
+      if (state.tinyTrollShrinkTimer > 0) {
+        state.tinyTrollShrinkTimer -= dt;
+        if (state.tinyTrollShrinkTimer <= 0) {
+          state.tinyTrollShrinkTimer = 0;
+          applyPaddleWidth();
+          state.message = "BAR RESTORED";
+          state.messageTimer = .8;
+        } else {
+          applyPaddleWidth();
+        }
+      }
+
+      for (const head of tinyGlowingTrollHeads) {
+        head.wobble += dt * 3.2;
+        head.x += (head.vx + Math.sin(head.wobble) * 24) * dt;
+        head.y += head.vy * dt;
+        head.vy += 82 * dt;
+        head.rotation += head.rotationSpeed * dt;
+
+        const paddleTop = paddle.y - paddle.h / 2;
+        const hitsBar =
+          state.running &&
+          !head.hit &&
+          head.y + head.size * .55 >= paddleTop &&
+          head.y - head.size * .35 <= paddle.y + paddle.h &&
+          head.x > paddle.x - paddle.w / 2 - head.size * .5 &&
+          head.x < paddle.x + paddle.w / 2 + head.size * .5;
+
+        if (hitsBar) triggerTinyTrollShrink(head);
+
+        if (head.y > H + 80) head.alpha -= dt * .9;
+      }
+
+      tinyGlowingTrollHeads = tinyGlowingTrollHeads.filter(head => head.alpha > 0);
     }
 
     function updateTrollHeads(dt) {
@@ -2055,6 +2064,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       updateEggplants(dt);
       updateSkyBalls(dt);
       updateTrollHeads(dt);
+      updateTinyGlowingTrollHeads(dt);
       updateGlitchParticles(dt);
       updateSadFaceEmojis(dt);
       updateSmoke(dt);
@@ -2063,7 +2073,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       updateBombs(dt);
       updateBombBits(dt);
       updateMiniBeachBalls(dt);
-      updateGlowingTrollHeads(dt);
       updateBatteryEmojis(dt);
 
       if (gameOverGlowTimer > 0) {
@@ -2115,12 +2124,36 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       popTexts = popTexts.filter(pop => pop.life > 0);
     }
 
+    function scoreQualifiesForTopFive(score) {
+      const numericScore = Number(score) || 0;
+
+      if (numericScore <= 0) return false;
+
+      const currentTopFive = Array.isArray(leaderboard)
+        ? [...leaderboard]
+            .filter(entry => entry && Number.isFinite(Number(entry.score)))
+            .sort((a, b) => Number(b.score) - Number(a.score))
+            .slice(0, 5)
+        : [];
+
+      if (currentTopFive.length < 5) return true;
+
+      return numericScore > Number(currentTopFive[4].score);
+    }
+
     function askForScoreSubmit() {
       if (state.scoreSubmitted || state.score <= 0) return;
+
+      // Only ask for a name if this score qualifies for the current global/local Top 5.
+      if (!scoreQualifiesForTopFive(state.score)) {
+        state.scoreSubmitted = true;
+        return;
+      }
+
       state.scoreSubmitted = true;
 
       setTimeout(() => {
-        const raw = prompt(`Score: ${state.score}\nEnter a name up to 8 letters/numbers:`, "PLAYER");
+        const raw = prompt(`TOP 5 SCORE!\nScore: ${state.score}\nEnter a name up to 8 letters/numbers:`, "PLAYER");
         if (!raw) return;
 
         const initials = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
@@ -2532,62 +2565,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
 
 
-
-    function drawGlowingTrollHeads() {
-      for (const head of glowingTrollHeads) {
-        const width = head.size * 1.8;
-        const height = width * .74;
-        const glowPulse = .65 + Math.sin(head.pulse) * .25;
-
-        ctx.save();
-        ctx.globalAlpha = head.alpha;
-        ctx.translate(head.x, head.y);
-        ctx.rotate(head.rotation);
-
-        ctx.shadowBlur = head.size * 1.3;
-        ctx.shadowColor = "rgba(57,255,20,.95)";
-        ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = `rgba(57,255,20,${.22 + glowPulse * .18})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, head.size * .95, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.globalCompositeOperation = "source-over";
-        if (trollImg.complete && trollImg.naturalWidth > 0) {
-          ctx.drawImage(trollImg, -width / 2, -height / 2, width, height);
-        } else {
-          ctx.fillStyle = "#fff";
-          ctx.strokeStyle = "#39ff14";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        ctx.restore();
-      }
-    }
-
-    function drawShrinkCountdown() {
-      if (!state.shrinkBarActive) return;
-
-      const seconds = Math.ceil(state.shrinkBarTimer);
-
-      ctx.save();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(57,255,20,.95)";
-      ctx.shadowBlur = 18;
-      ctx.shadowColor = "rgba(57,255,20,.9)";
-      ctx.font = `900 ${Math.min(W * .12, 70)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText(String(seconds), W / 2, H * .22);
-
-      ctx.font = `900 ${Math.min(W * .045, 26)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText("TINY BAR", W / 2, H * .29);
-      ctx.restore();
-    }
-
     function drawMiniBeachBall(mini) {
       ctx.save();
       ctx.globalAlpha = mini.alpha;
@@ -2743,6 +2720,53 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       ctx.restore();
     }
 
+    function drawTinyGlowingTrollHead(head) {
+      const aspect = 0.74;
+      const width = head.size * 1.75;
+      const height = width * aspect;
+      const pulse = .72 + Math.sin(performance.now() * .012 + head.wobble) * .28;
+
+      ctx.save();
+      ctx.globalAlpha = head.alpha;
+      ctx.translate(head.x, head.y);
+      ctx.rotate(head.rotation);
+
+      ctx.shadowBlur = 22 + pulse * 16;
+      ctx.shadowColor = "rgba(57,255,20,.95)";
+      ctx.fillStyle = `rgba(57,255,20,${.20 + pulse * .20})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, width * .58, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (trollImg.complete && trollImg.naturalWidth > 0) {
+        ctx.drawImage(trollImg, -width / 2, -height / 2, width, height);
+      } else {
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#39ff14";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawTinyTrollCountdown() {
+      if (state.tinyTrollShrinkTimer <= 0) return;
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(57,255,20,.96)";
+      ctx.shadowBlur = 24;
+      ctx.shadowColor = "rgba(57,255,20,.95)";
+      ctx.font = `900 ${Math.min(W * .075, 44)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(`TINY TROLL BAR: ${Math.ceil(state.tinyTrollShrinkTimer)}`, W / 2, H * .145);
+      ctx.restore();
+    }
+
     function drawPopTexts() {
       for (const pop of popTexts) {
         ctx.save();
@@ -2865,7 +2889,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       drawTargetPieces();
 
       drawBombs();
-      drawGlowingTrollHeads();
 
       for (const skyBall of skyBalls) drawSkyBall(skyBall);
       drawMiniBeachBalls();
@@ -2879,6 +2902,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       drawBombBits();
 
       for (const head of trollHeads) drawTrollHead(head);
+      for (const head of tinyGlowingTrollHeads) drawTinyGlowingTrollHead(head);
 
       drawEggplants();
       drawPoops();
@@ -2891,7 +2915,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       drawGameOverGlow();
       drawGameOverLetters();
-      drawShrinkCountdown();
+      drawTinyTrollCountdown();
       drawMessage();
     }
 

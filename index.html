@@ -199,7 +199,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
   <div id="mutePrompt">Press M to mute</div>
-  <div id="versionLabel">trollball ver 12.72</div>
+  <div id="versionLabel">trollball ver 10.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -2124,36 +2124,12 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       popTexts = popTexts.filter(pop => pop.life > 0);
     }
 
-    function scoreQualifiesForTopFive(score) {
-      const numericScore = Number(score) || 0;
-
-      if (numericScore <= 0) return false;
-
-      const currentTopFive = Array.isArray(leaderboard)
-        ? [...leaderboard]
-            .filter(entry => entry && Number.isFinite(Number(entry.score)))
-            .sort((a, b) => Number(b.score) - Number(a.score))
-            .slice(0, 5)
-        : [];
-
-      if (currentTopFive.length < 5) return true;
-
-      return numericScore > Number(currentTopFive[4].score);
-    }
-
     function askForScoreSubmit() {
       if (state.scoreSubmitted || state.score <= 0) return;
-
-      // Only ask for a name if this score qualifies for the current global/local Top 5.
-      if (!scoreQualifiesForTopFive(state.score)) {
-        state.scoreSubmitted = true;
-        return;
-      }
-
       state.scoreSubmitted = true;
 
       setTimeout(() => {
-        const raw = prompt(`TOP 5 SCORE!\nScore: ${state.score}\nEnter a name up to 8 letters/numbers:`, "PLAYER");
+        const raw = prompt(`Score: ${state.score}\nEnter a name up to 8 letters/numbers:`, "PLAYER");
         if (!raw) return;
 
         const initials = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);

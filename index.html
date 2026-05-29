@@ -70,51 +70,6 @@
       to { transform: translateX(-100%); }
     }
 
-    #musicPlayer {
-      position: fixed;
-      left: 10px;
-      bottom: 28px;
-      z-index: 22;
-      width: 250px;
-      background: rgba(0, 0, 0, .88);
-      border: 2px solid rgba(57, 255, 20, .55);
-      box-shadow: 0 0 14px rgba(57, 255, 20, .22);
-      color: #39ff14;
-      padding: 6px 7px;
-      font: 900 10px "Courier New", monospace;
-      pointer-events: auto;
-      touch-action: auto;
-    }
-
-    #musicTrackName {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-shadow: 0 0 7px rgba(57, 255, 20, .7);
-      margin-bottom: 5px;
-    }
-
-    #musicControls {
-      display: flex;
-      gap: 5px;
-    }
-
-    #musicControls button {
-      flex: 1;
-      background: #071007;
-      color: #39ff14;
-      border: 1px solid rgba(57, 255, 20, .72);
-      font: 900 10px "Courier New", monospace;
-      cursor: pointer;
-      padding: 3px 0;
-      box-shadow: inset 0 0 8px rgba(57, 255, 20, .14);
-    }
-
-    #musicControls button:active {
-      background: #39ff14;
-      color: #071007;
-    }
-
     #versionLabel {
       position: fixed;
       right: 10px;
@@ -218,17 +173,8 @@ He's nervous, but on the surface, he looks calm and readyHis palms are sweaty, k
 There's vomit on his sweater already, mom's spaghetti
 He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
-  <div id="musicPlayer">
-    <div id="musicTrackName">theme.mp3</div>
-    <div id="musicControls">
-      <button id="musicPrev" type="button">⏮</button>
-      <button id="musicPlay" type="button">▶ PLAY</button>
-      <button id="musicPause" type="button">⏸ PAUSE</button>
-      <button id="musicNext" type="button">⏭</button>
-    </div>
-  </div>
   <audio id="musicAudio" preload="auto"></audio>
-  <div id="versionLabel">trollball ver 5.67</div>
+  <div id="versionLabel">trollball ver 6.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -263,134 +209,69 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
 
     const musicAudio = document.getElementById("musicAudio");
-    const musicTrackName = document.getElementById("musicTrackName");
-    const musicPrev = document.getElementById("musicPrev");
-    const musicPlay = document.getElementById("musicPlay");
-    const musicPause = document.getElementById("musicPause");
-    const musicNext = document.getElementById("musicNext");
 
-    /*
-      MUSIC FILES:
-      Upload these MP3 files to the same GitHub folder as index.html.
-      The first track is theme.mp3 and the game will try to autoplay it.
-      Add more MP3 filenames here whenever you want:
-      const MUSIC_FILES = ["theme.mp3", "lennox.mp3", "photo.mp3"];
+    const MUSIC_FILES = ["theme.mp3", "lennox.mp3", "photo.mp3"];
     let currentTrackIndex = 0;
-
-    function setMusicLabel(extra = "") {
-      if (!musicTrackName || !MUSIC_FILES.length) return;
-      musicTrackName.textContent = MUSIC_FILES[currentTrackIndex] + extra;
-    }
+    let musicEnabledForRound = false;
 
     function loadMusicTrack(index) {
       if (!musicAudio || !MUSIC_FILES.length) return;
 
       currentTrackIndex = (index + MUSIC_FILES.length) % MUSIC_FILES.length;
-      const file = MUSIC_FILES[currentTrackIndex];
 
-      musicAudio.pause();
-      musicAudio.src = file;
+      musicAudio.src = MUSIC_FILES[currentTrackIndex];
       musicAudio.volume = 0.78;
-      musicAudio.loop = MUSIC_FILES.length === 1;
+      musicAudio.loop = false;
       musicAudio.preload = "auto";
       musicAudio.autoplay = false;
       musicAudio.muted = false;
       musicAudio.setAttribute("playsinline", "playsinline");
       musicAudio.load();
-
-      setMusicLabel();
     }
 
-    function ensureMusicLoaded() {
+    function playRoundMusic() {
       if (!musicAudio || !MUSIC_FILES.length) return;
-      const wantedFile = MUSIC_FILES[currentTrackIndex];
 
-      if (!musicAudio.src || !musicAudio.src.includes(wantedFile)) {
-        loadMusicTrack(currentTrackIndex);
-      }
-    }
+      musicEnabledForRound = true;
 
-    function playMusic() {
-      if (!musicAudio) return;
+      if (!musicAudio.src) loadMusicTrack(currentTrackIndex);
 
-      ensureMusicLoaded();
       musicAudio.muted = false;
       musicAudio.volume = 0.78;
 
       const attempt = musicAudio.play();
-
-      if (attempt && typeof attempt.then === "function") {
-        attempt
-          .then(() => setMusicLabel("  PLAYING"))
-          .catch(error => {
-            console.warn("Music play failed:", error);
-            setMusicLabel("  TAP PLAY AGAIN");
-          });
-      } else {
-        setMusicLabel("  PLAYING");
+      if (attempt && typeof attempt.catch === "function") {
+        attempt.catch(error => {
+          console.warn("Music play failed:", error);
+        });
       }
     }
 
-    function pauseMusic() {
+    function stopRoundMusic() {
       if (!musicAudio) return;
+
+      musicEnabledForRound = false;
       musicAudio.pause();
-      setMusicLabel("  PAUSED");
+      musicAudio.currentTime = 0;
     }
 
-    function nextMusicTrack() {
-      const wasPlaying = musicAudio && !musicAudio.paused;
+    function playNextRoundTrack() {
+      if (!musicAudio || !MUSIC_FILES.length) return;
+
       loadMusicTrack(currentTrackIndex + 1);
-      if (wasPlaying) playMusic();
+
+      if (musicEnabledForRound && state.running) {
+      }
     }
-
-    function previousMusicTrack() {
-      const wasPlaying = musicAudio && !musicAudio.paused;
-      loadMusicTrack(currentTrackIndex - 1);
-      if (wasPlaying) playMusic();
-    }
-
-    if (musicPlay) musicPlay.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      playMusic();
-    });
-
-    if (musicPause) musicPause.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      pauseMusic();
-    });
-
-    if (musicNext) musicNext.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      nextMusicTrack();
-    });
-
-    if (musicPrev) musicPrev.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      previousMusicTrack();
-    });
 
     if (musicAudio) {
-      musicAudio.addEventListener("ended", nextMusicTrack);
+      musicAudio.addEventListener("ended", playNextRoundTrack);
       musicAudio.addEventListener("error", () => {
-        setMusicLabel("  FILE NOT FOUND");
         console.warn("Could not load music file:", MUSIC_FILES[currentTrackIndex]);
+        playNextRoundTrack();
       });
 
       loadMusicTrack(0);
-    }
-
-
-    const musicPlayerShield = document.getElementById("musicPlayer");
-    if (musicPlayerShield) {
-      ["pointerdown", "pointermove", "pointerup", "click", "touchstart"].forEach(type => {
-        musicPlayerShield.addEventListener(type, event => {
-          event.stopPropagation();
-        });
-      });
     }
 
     const gifBurst = document.getElementById("gifBurst");
@@ -597,7 +478,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     let bombBits = [];
     let miniBeachBalls = [];
 
-    const keys = { left: false, right: false, down: false };
+    const keys = { left: false, right: false, down: false, up: false };
 
     const state = {
       score: 0,
@@ -1922,6 +1803,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     function triggerGameOver() {
       if (state.gameOver) return;
 
+      stopRoundMusic();
+
       state.gameOver = true;
       state.running = false;
 
@@ -2780,7 +2663,12 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       if (event.code === "Space") {
         event.preventDefault();
-        if (!state.running) resetGame();
+
+        if (!state.running) {
+          resetGame();
+        }
+
+        playRoundMusic();
       }
     });
 

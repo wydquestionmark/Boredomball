@@ -70,6 +70,50 @@
       to { transform: translateX(-100%); }
     }
 
+    #musicPlayer {
+      position: fixed;
+      left: 10px;
+      bottom: 28px;
+      z-index: 22;
+      width: 210px;
+      background: rgba(0, 0, 0, .88);
+      border: 2px solid rgba(57, 255, 20, .55);
+      box-shadow: 0 0 14px rgba(57, 255, 20, .22);
+      color: #39ff14;
+      padding: 6px 7px;
+      font: 900 10px "Courier New", monospace;
+      pointer-events: auto;
+    }
+
+    #musicTrackName {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-shadow: 0 0 7px rgba(57, 255, 20, .7);
+      margin-bottom: 5px;
+    }
+
+    #musicControls {
+      display: flex;
+      gap: 5px;
+    }
+
+    #musicControls button {
+      flex: 1;
+      background: #071007;
+      color: #39ff14;
+      border: 1px solid rgba(57, 255, 20, .72);
+      font: 900 11px "Courier New", monospace;
+      cursor: pointer;
+      padding: 3px 0;
+      box-shadow: inset 0 0 8px rgba(57, 255, 20, .14);
+    }
+
+    #musicControls button:active {
+      background: #39ff14;
+      color: #071007;
+    }
+
     #versionLabel {
       position: fixed;
       right: 10px;
@@ -173,7 +217,16 @@ He's nervous, but on the surface, he looks calm and readyHis palms are sweaty, k
 There's vomit on his sweater already, mom's spaghetti
 He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
-  <div id="versionLabel">trollball ver 2.67</div>
+  <div id="musicPlayer">
+    <div id="musicTrackName">theme.mp3</div>
+    <div id="musicControls">
+      <button id="musicPrev" type="button">⏮</button>
+      <button id="musicPlay" type="button">▶</button>
+      <button id="musicNext" type="button">⏭</button>
+    </div>
+  </div>
+  <audio id="musicAudio" preload="auto"></audio>
+  <div id="versionLabel">trollball ver 3.67</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -197,6 +250,90 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     if (tickerText) {
       tickerText.textContent = tickerText.textContent + "   " + tickerText.textContent + "   " + tickerText.textContent;
     }
+
+
+    const musicAudio = document.getElementById("musicAudio");
+    const musicTrackName = document.getElementById("musicTrackName");
+    const musicPrev = document.getElementById("musicPrev");
+    const musicPlay = document.getElementById("musicPlay");
+    const musicNext = document.getElementById("musicNext");
+
+    /*
+      MUSIC FILES:
+      Upload these MP3 files to the same GitHub folder as index.html.
+      The first track is theme.mp3 and the game will try to autoplay it.
+      Add more MP3 filenames here whenever you want:
+      const MUSIC_FILES = ["theme.mp3", "track2.mp3", "track3.mp3"];
+    */
+    const MUSIC_FILES = ["theme.mp3","lennox.mp3","photo.mp3"];
+    let currentTrackIndex = 0;
+    let musicStarted = false;
+
+    function loadMusicTrack(index, shouldPlay = false) {
+      if (!musicAudio || !MUSIC_FILES.length) return;
+
+      currentTrackIndex = (index + MUSIC_FILES.length) % MUSIC_FILES.length;
+      const file = MUSIC_FILES[currentTrackIndex];
+
+      musicAudio.src = file;
+      musicAudio.loop = MUSIC_FILES.length === 1;
+      musicAudio.volume = 0.62;
+
+      if (musicTrackName) musicTrackName.textContent = file;
+
+      if (shouldPlay) {
+        musicAudio.play()
+          .then(() => {
+            musicStarted = true;
+            if (musicPlay) musicPlay.textContent = "⏸";
+          })
+          .catch(() => {
+            if (musicPlay) musicPlay.textContent = "▶";
+          });
+      }
+    }
+
+    function playMusic() {
+      if (!musicAudio) return;
+      musicAudio.play()
+        .then(() => {
+          musicStarted = true;
+          if (musicPlay) musicPlay.textContent = "⏸";
+        })
+        .catch(() => {
+          if (musicPlay) musicPlay.textContent = "▶";
+        });
+    }
+
+    function pauseMusic() {
+      if (!musicAudio) return;
+      musicAudio.pause();
+      if (musicPlay) musicPlay.textContent = "▶";
+    }
+
+    function toggleMusic() {
+      if (!musicAudio) return;
+      if (musicAudio.paused) playMusic();
+      else pauseMusic();
+    }
+
+    function nextMusicTrack() {
+      loadMusicTrack(currentTrackIndex + 1, true);
+    }
+
+    function previousMusicTrack() {
+      loadMusicTrack(currentTrackIndex - 1, true);
+    }
+
+    if (musicPlay) musicPlay.addEventListener("click", toggleMusic);
+    if (musicNext) musicNext.addEventListener("click", nextMusicTrack);
+    if (musicPrev) musicPrev.addEventListener("click", previousMusicTrack);
+
+    if (musicAudio) {
+      musicAudio.addEventListener("ended", nextMusicTrack);
+      loadMusicTrack(0, true);
+    }
+
 
     const gifBurst = document.getElementById("gifBurst");
 
@@ -561,7 +698,11 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         verticalBounceCount: 0,
         verticalWarning: false,
         glitchShake: 0,
-        redGlitch: 0
+        redGlitch: 0,
+        vicinityBounceCount: 0,
+        lastBounceX: null,
+        lastBouncePaddleX: null,
+        explodeNextBounce: false
       };
     }
 
@@ -1551,28 +1692,43 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
         barGlow = Math.min(2, Math.abs(ball.vy) / 600);
 
-        const verticalBounce =
-          Math.abs(ball.vx) < 42 &&
-          Math.abs(hitPosition) < .16 &&
-          Math.abs(paddle.velocity) < 70;
+        const sameGeneralVicinity =
+          ball.lastBounceX !== null &&
+          Math.abs(ball.x - ball.lastBounceX) < Math.max(34, ball.r * .95);
 
-        if (verticalBounce) {
-          ball.verticalBounceCount += 1;
+        const playerBarelyMovedBar =
+          ball.lastBouncePaddleX !== null &&
+          Math.abs(paddle.x - ball.lastBouncePaddleX) < Math.max(26, paddle.w * .075);
 
-          if (ball.verticalBounceCount >= 3) {
-            ball.verticalWarning = true;
-            ball.redGlitch = 1;
-            ball.glitchShake = 1;
-            state.message = "AUSTIN GLITCH DETECTED";
-            state.messageTimer = 1.6;
-            triggerAustinGlitch(ball);
-            return;
-          }
+        const centeredHit = Math.abs(hitPosition) < .28;
+        const lowSideMotion = Math.abs(ball.vx) < 125;
+
+        if (sameGeneralVicinity && playerBarelyMovedBar && centeredHit && lowSideMotion) {
+          ball.vicinityBounceCount += 1;
         } else {
-          ball.verticalBounceCount = 0;
+          ball.vicinityBounceCount = 1;
+        }
+
+        ball.lastBounceX = ball.x;
+        ball.lastBouncePaddleX = paddle.x;
+
+        if (ball.explodeNextBounce) {
+          triggerAustinGlitch(ball);
+          return;
+        }
+
+        if (ball.vicinityBounceCount >= 3) {
+          ball.verticalWarning = true;
+          ball.redGlitch = 1;
+          ball.glitchShake = 1;
+          ball.explodeNextBounce = true;
+          state.message = "AUSTIN GLITCH DETECTION";
+          state.messageTimer = 2.2;
+        } else {
           ball.verticalWarning = false;
           ball.redGlitch = 0;
           ball.glitchShake = 0;
+          ball.explodeNextBounce = false;
         }
 
         state.targetStreak = 0;
@@ -1588,7 +1744,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       state.glitchActive = true;
       state.running = false;
-      state.message = "AUSTIN GLITCH DETECTED";
+      state.message = "AUSTIN GLITCH DETECTION";
       state.messageTimer = 2.4;
       hint.textContent = "TAP OR SPACE TO RESTART";
 
@@ -2433,7 +2589,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      if (state.message === "AUSTIN GLITCH DETECTED") {
+      if (state.message === "AUSTIN GLITCH DETECTION") {
         ctx.fillStyle = "rgba(255,0,0,.92)";
         ctx.shadowBlur = 22;
         ctx.shadowColor = "rgba(255,0,0,.95)";
@@ -2508,6 +2664,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       if (event.code === "ArrowRight" || event.code === "KeyD") keys.right = true;
       if (event.code === "ArrowDown" || event.code === "KeyS") keys.down = true;
 
+      if (!musicStarted && musicAudio && musicAudio.paused) playMusic();
+
       if (event.code === "Space") {
         event.preventDefault();
         if (!state.running) resetGame();
@@ -2521,6 +2679,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     });
 
     window.addEventListener("pointerdown", event => {
+      if (!musicStarted && musicAudio && musicAudio.paused) playMusic();
       if (!state.running) resetGame();
       paddle.targetX = event.clientX;
     });

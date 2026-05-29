@@ -199,7 +199,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
   <div id="mutePrompt">Press M to mute</div>
-  <div id="versionLabel">trollball ver 7.68</div>
+  <div id="versionLabel">trollball ver 8.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -1736,27 +1736,56 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
         ball.y = paddleTop - ball.r;
         ball.vy = -Math.max(randomBounce, carryBounce);
-        ball.vx += hitPosition * (320 + Math.random() * 320) + paddle.velocity * .48;
-        ball.vx = clamp(ball.vx, -900, 900);
+        ball.vx += hitPosition * (460 + Math.random() * 420) + paddle.velocity * .62;
+
+        // If the player hits too close to center while barely moving,
+        // dampen horizontal motion so the glitch detector catches it.
+        if (Math.abs(hitPosition) < .18 && Math.abs(paddle.velocity) < 120) {
+          ball.vx *= .45;
+        }
+
+        ball.vx = clamp(ball.vx, -980, 980);
         ball.spinVelocity = ball.vx * (.012 + Math.random() * .02);
 
         barGlow = Math.min(2, Math.abs(ball.vy) / 600);
 
-        const sameGeneralVicinity =
-          ball.lastBounceX !== null &&
-          Math.abs(ball.x - ball.lastBounceX) < Math.max(34, ball.r * .95);
+        /*
+          AUSTIN GLITCH DETECTION:
+          This now strongly punishes straight-up / straight-down play.
 
-        const playerBarelyMovedBar =
-          ball.lastBouncePaddleX !== null &&
-          Math.abs(paddle.x - ball.lastBouncePaddleX) < Math.max(26, paddle.w * .075);
+          The player needs to create a diagonal path by:
+          - hitting away from the center of the bar
+          - moving the bar left/right
+          - giving the ball enough horizontal speed
 
-        const centeredHit = Math.abs(hitPosition) < .28;
-        const lowSideMotion = Math.abs(ball.vx) < 125;
+          If the ball keeps bouncing in a mostly vertical path,
+          it warns after 2 suspicious bounces and explodes on the next one.
+        */
+        const previousBounceX = ball.lastBounceX;
+        const previousPaddleX = ball.lastBouncePaddleX;
 
-        if (sameGeneralVicinity && playerBarelyMovedBar && centeredHit && lowSideMotion) {
+        const repeatBounceArea =
+          previousBounceX !== null &&
+          Math.abs(ball.x - previousBounceX) < Math.max(54, ball.r * 1.35);
+
+        const barBarelyMoved =
+          previousPaddleX !== null &&
+          Math.abs(paddle.x - previousPaddleX) < Math.max(42, paddle.w * .12);
+
+        const tooCentered = Math.abs(hitPosition) < .38;
+        const notDiagonalEnough = Math.abs(ball.vx) < 235;
+        const paddleNotDrivingBall = Math.abs(paddle.velocity) < 170;
+
+        const suspiciousVerticalBounce =
+          repeatBounceArea ||
+          (tooCentered && notDiagonalEnough) ||
+          (barBarelyMoved && notDiagonalEnough) ||
+          (tooCentered && paddleNotDrivingBall);
+
+        if (suspiciousVerticalBounce) {
           ball.vicinityBounceCount += 1;
         } else {
-          ball.vicinityBounceCount = 1;
+          ball.vicinityBounceCount = 0;
         }
 
         ball.lastBounceX = ball.x;
@@ -1767,13 +1796,20 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
           return;
         }
 
-        if (ball.vicinityBounceCount >= 3) {
+        if (ball.vicinityBounceCount >= 2) {
           ball.verticalWarning = true;
           ball.redGlitch = 1;
           ball.glitchShake = 1;
           ball.explodeNextBounce = true;
           state.message = "AUSTIN GLITCH DETECTION";
           state.messageTimer = 2.2;
+        } else if (ball.vicinityBounceCount === 1) {
+          ball.verticalWarning = true;
+          ball.redGlitch = .55;
+          ball.glitchShake = .45;
+          ball.explodeNextBounce = false;
+          state.message = "DIAGONAL PATH REQUIRED";
+          state.messageTimer = .9;
         } else {
           ball.verticalWarning = false;
           ball.redGlitch = 0;

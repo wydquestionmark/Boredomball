@@ -204,6 +204,15 @@
       // "gif3.gif"
     ];
 
+    // Random falling emoji pool.
+    // Add or remove emojis here any time you want to change the rain effect.
+    const RANDOM_FALLING_EMOJIS = [
+      "🍆", "🍌", "🍕", "🍔", "🌭", "🍟", "🌮", "🍩",
+      "🔥", "💎", "⭐", "⚡", "🎲", "🎯", "🎈", "🧨",
+      "👽", "🤡", "😈", "👻", "💀", "🧠", "👁️", "🦴",
+      "🐸", "🐵", "🐔", "🦆", "🦀", "🐙", "🦄", "🐢"
+    ];
+
     /*
       FIREBASE GLOBAL LEADERBOARD + VISITOR COUNTER
 
@@ -574,7 +583,10 @@
           rotationSpeed: (Math.random() - .5) * 4.5,
           alpha: 1,
           fadeDelay: .45 + Math.random() * .75,
-          wobble: Math.random() * Math.PI * 2
+          wobble: Math.random() * Math.PI * 2,
+          emoji: RANDOM_FALLING_EMOJIS[
+            Math.floor(Math.random() * RANDOM_FALLING_EMOJIS.length)
+          ]
         });
       }
     }
@@ -1395,7 +1407,7 @@
         ctx.font = `${eggplant.size}px serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("🍆", 0, 0);
+        ctx.fillText(eggplant.emoji || "🍆", 0, 0);
         ctx.restore();
       }
     }

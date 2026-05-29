@@ -294,6 +294,7 @@
     let trollHeads = [];
     let bigfoots = [];
     let skyBalls = [];
+    let glitchParticles = [];
     let leaderboard = [];
     let barGlow = 0;
     let gameOverLetters = [];
@@ -323,6 +324,8 @@
       did80Flip: false,
       did85Unflip: false,
       did90SkyBalls: false,
+      glitchTimer: 0,
+      glitchActive: false,
 
       targetStreak: 0,
       message: "",
@@ -477,7 +480,10 @@
         vx: direction * (170 + Math.random() * 240),
         vy: 60 + Math.random() * 120,
         spin: Math.random() * Math.PI * 2,
-        spinVelocity: direction * (2.2 + Math.random() * 4)
+        spinVelocity: direction * (2.2 + Math.random() * 4),
+        stuckTimer: 0,
+        glitching: false,
+        glitchShake: 0
       };
     }
 
@@ -523,6 +529,8 @@
       state.did80Flip = false;
       state.did85Unflip = false;
       state.did90SkyBalls = false;
+      state.glitchTimer = 0;
+      state.glitchActive = false;
 
       state.targetStreak = 0;
       state.message = "";
@@ -566,6 +574,7 @@
       trollHeads = [];
       bigfoots = [];
       skyBalls = [];
+      glitchParticles = [];
 
       sizeCanvas();
       hint.textContent = "USE ARROW KEYS OR DRAG TO CONTROL THE BAR";
@@ -1115,9 +1124,81 @@
 
         barGlow = Math.min(2, Math.abs(ball.vy) / 600);
 
+        ball.stuckTimer = 0;
+        ball.glitchShake = 0;
         state.targetStreak = 0;
         addScore(1);
       }
+
+      const restingOnBar =
+        Math.abs(ball.y + ball.r - paddleTop) < 5 &&
+        ball.x >= paddleLeft - ball.r * .18 &&
+        ball.x <= paddleRight + ball.r * .18;
+
+      const barelyMoving =
+        Math.abs(ball.vx) < 28 &&
+        Math.abs(ball.vy) < 38;
+
+      if (restingOnBar && barelyMoving && state.running) {
+        ball.stuckTimer += dt;
+        ball.glitchShake = Math.min(1, ball.stuckTimer / 1.15);
+
+        if (ball.stuckTimer > 1.15) {
+          triggerAustinGlitch(ball);
+        }
+      } else {
+        ball.stuckTimer = 0;
+        ball.glitchShake = 0;
+      }
+    }
+
+
+    function triggerAustinGlitch(ball) {
+      if (state.gameOver || state.glitchActive) return;
+
+      state.glitchActive = true;
+      state.running = false;
+      state.message = "AUSTIN GLITCH ERROR";
+      state.messageTimer = 2.4;
+      hint.textContent = "TAP OR SPACE TO RESTART";
+
+      ball.glitching = true;
+      ball.glitchShake = 1;
+
+      for (let i = 0; i < 56; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 120 + Math.random() * 620;
+
+        glitchParticles.push({
+          x: ball.x,
+          y: ball.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          r: 3 + Math.random() * 10,
+          alpha: 1,
+          life: .8 + Math.random() * .7,
+          color: Math.random() > .5 ? "rgba(255,60,0," : "rgba(65,184,188,"
+        });
+      }
+
+      balls = balls.filter(item => item !== ball);
+
+      setTimeout(() => {
+        triggerGameOver();
+      }, 450);
+    }
+
+    function updateGlitchParticles(dt) {
+      for (const p of glitchParticles) {
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 680 * dt;
+        p.r += 10 * dt;
+        p.alpha = Math.max(0, p.life / 1.2);
+      }
+
+      glitchParticles = glitchParticles.filter(p => p.alpha > 0);
     }
 
     function triggerGameOver() {
@@ -1183,6 +1264,7 @@
       updateBigfoots(dt);
       updateSkyBalls(dt);
       updateTrollHeads(dt);
+      updateGlitchParticles(dt);
       updateSmoke(dt);
       updateTargetPieces(dt);
       updateGameOverLetters(dt);
@@ -1773,15 +1855,40 @@
       ctx.restore();
     }
 
+
+    function drawGlitchParticles() {
+      for (const p of glitchParticles) {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color + p.alpha + ")";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     function drawMessage() {
       if (!state.message) return;
 
       ctx.save();
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = state.message === "+ BALL" ? "rgba(65,184,188,.75)" : "rgba(0,0,0,.75)";
-      ctx.font = `900 ${Math.min(W * .11, 64)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText(state.message, W / 2, H * .36);
+      if (state.message === "AUSTIN GLITCH ERROR") {
+        ctx.fillStyle = "rgba(255,0,0,.92)";
+        ctx.shadowBlur = 22;
+        ctx.shadowColor = "rgba(255,0,0,.95)";
+        ctx.font = `900 ${Math.min(W * .105, 62)}px Impact, Arial Black, sans-serif`;
+        ctx.fillText(
+          state.message,
+          W / 2 + (Math.random() - .5) * 12,
+          H * .28 + (Math.random() - .5) * 8
+        );
+      } else {
+        ctx.fillStyle = state.message === "+ BALL" ? "rgba(65,184,188,.75)" : "rgba(0,0,0,.75)";
+        ctx.font = `900 ${Math.min(W * .11, 64)}px Impact, Arial Black, sans-serif`;
+        ctx.fillText(state.message, W / 2, H * .36);
+      }
       ctx.restore();
     }
 
@@ -1811,6 +1918,7 @@
 
       drawEggplants();
       drawPoops();
+      drawGlitchParticles();
       drawPopTexts();
 
       drawOverlayText("WOW!", state.streakWowTimer, 1.25, H * .34);

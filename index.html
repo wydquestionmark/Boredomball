@@ -199,7 +199,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
   <div id="mutePrompt">Press M to mute</div>
-  <div id="versionLabel">trollball ver 9.68</div>
+  <div id="versionLabel">trollball ver 10.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -725,7 +725,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         vicinityBounceCount: 0,
         lastBounceX: null,
         lastBouncePaddleX: null,
-        explodeNextBounce: false
+        explodeNextBounce: false,
+        glitchWarningArmed: false
       };
     }
 
@@ -1766,15 +1767,15 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
         const repeatBounceArea =
           previousBounceX !== null &&
-          Math.abs(ball.x - previousBounceX) < Math.max(42, ball.r * 1.15);
+          Math.abs(ball.x - previousBounceX) < Math.max(34, ball.r * .95);
 
         const barBarelyMoved =
           previousPaddleX !== null &&
-          Math.abs(paddle.x - previousPaddleX) < Math.max(28, paddle.w * .08);
+          Math.abs(paddle.x - previousPaddleX) < Math.max(22, paddle.w * .06);
 
-        const tooCentered = Math.abs(hitPosition) < .26;
-        const notDiagonalEnough = Math.abs(ball.vx) < 160;
-        const paddleNotDrivingBall = Math.abs(paddle.velocity) < 170;
+        const tooCentered = Math.abs(hitPosition) < .20;
+        const notDiagonalEnough = Math.abs(ball.vx) < 120;
+        const paddleNotDrivingBall = Math.abs(paddle.velocity) < 115;
 
         const suspiciousVerticalBounce =
           repeatBounceArea ||
@@ -1791,28 +1792,40 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         ball.lastBounceX = ball.x;
         ball.lastBouncePaddleX = paddle.x;
 
-        if (ball.explodeNextBounce) {
+        if (ball.explodeNextBounce && suspiciousVerticalBounce) {
           triggerAustinGlitch(ball);
           return;
         }
 
-        if (ball.vicinityBounceCount >= 3) {
+        if (ball.explodeNextBounce && !suspiciousVerticalBounce) {
+          // Player made a unique/diagonal bounce after the warning, so forgive it.
+          ball.vicinityBounceCount = 0;
+          ball.verticalWarning = false;
+          ball.redGlitch = 0;
+          ball.glitchShake = 0;
+          ball.explodeNextBounce = false;
+          ball.glitchWarningArmed = false;
+        } else if (ball.vicinityBounceCount >= 5 && !ball.glitchWarningArmed) {
+          // Warning only: player gets one more bounce to break the pattern.
           ball.verticalWarning = true;
-          ball.redGlitch = 1;
-          ball.glitchShake = 1;
+          ball.redGlitch = .75;
+          ball.glitchShake = .55;
           ball.explodeNextBounce = true;
+          ball.glitchWarningArmed = true;
           state.message = "AUSTIN GLITCH DETECTION";
           state.messageTimer = 2.2;
-        } else if (ball.vicinityBounceCount >= 2) {
+        } else if (ball.vicinityBounceCount >= 3) {
+          // Very subtle visual warning only. No text.
           ball.verticalWarning = true;
-          ball.redGlitch = .45;
-          ball.glitchShake = .3;
+          ball.redGlitch = .28;
+          ball.glitchShake = .15;
           ball.explodeNextBounce = false;
         } else {
           ball.verticalWarning = false;
           ball.redGlitch = 0;
           ball.glitchShake = 0;
           ball.explodeNextBounce = false;
+          ball.glitchWarningArmed = false;
         }
 
         state.targetStreak = 0;

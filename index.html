@@ -23,6 +23,17 @@
       width: 100vw;
       height: 100dvh;
       background: white;
+      transition: transform .65s ease, filter .35s ease;
+      transform-origin: center center;
+    }
+
+    body.inverted {
+      background: black;
+      filter: invert(1) hue-rotate(180deg);
+    }
+
+    #game.upsideDown {
+      transform: rotate(180deg);
     }
 
     #hint {
@@ -281,13 +292,15 @@
     let eggplants = [];
     let smokePuffs = [];
     let trollHeads = [];
+    let bigfoots = [];
+    let skyBalls = [];
     let leaderboard = [];
     let barGlow = 0;
     let gameOverLetters = [];
     let gameOverGlowText = "";
     let gameOverGlowTimer = 0;
 
-    const keys = { left: false, right: false };
+    const keys = { left: false, right: false, down: false };
 
     const state = {
       score: 0,
@@ -303,6 +316,13 @@
       nextTargetSpawnTimer: 0,
       nextGifScore: 12,
       nextEggplantScore: 7,
+
+      did10Bigfoot: false,
+      did67Invert: false,
+      did30FloatingBar: false,
+      did80Flip: false,
+      did85Unflip: false,
+      did90SkyBalls: false,
 
       targetStreak: 0,
       message: "",
@@ -497,6 +517,13 @@
       state.nextGifScore = 12;
       state.nextEggplantScore = 7;
 
+      state.did10Bigfoot = false;
+      state.did67Invert = false;
+      state.did30FloatingBar = false;
+      state.did80Flip = false;
+      state.did85Unflip = false;
+      state.did90SkyBalls = false;
+
       state.targetStreak = 0;
       state.message = "";
       state.messageTimer = 0;
@@ -517,6 +544,8 @@
       state.gifTimer = 0;
       gifBurst.classList.remove("show");
       gifBurst.removeAttribute("src");
+      document.body.classList.remove("inverted");
+      canvas.classList.remove("upsideDown");
 
       barGlow = 0;
       gameOverLetters = [];
@@ -535,6 +564,8 @@
       eggplants = [];
       smokePuffs = [];
       trollHeads = [];
+      bigfoots = [];
+      skyBalls = [];
 
       sizeCanvas();
       hint.textContent = "USE ARROW KEYS OR DRAG TO CONTROL THE BAR";
@@ -649,8 +680,52 @@
       }
     }
 
+
+    function spawnBigfoot() {
+      const fromLeft = Math.random() > .5;
+      bigfoots.push({
+        x: fromLeft ? -90 : W + 90,
+        y: H * (.68 + Math.random() * .10),
+        vx: fromLeft ? 340 : -340,
+        scale: .8 + Math.random() * .35,
+        run: 0,
+        facing: fromLeft ? 1 : -1,
+        alpha: 1
+      });
+    }
+
+    function triggerSkyBallRain() {
+      state.did90SkyBalls = true;
+
+      for (let i = 0; i < 16; i++) {
+        skyBalls.push({
+          x: Math.random() * W,
+          y: -60 - Math.random() * 700,
+          r: Math.max(22, Math.min(44, W * (.032 + Math.random() * .018))),
+          vx: (Math.random() - .5) * 140,
+          vy: 180 + Math.random() * 360,
+          spin: Math.random() * Math.PI * 2,
+          spinVelocity: (Math.random() - .5) * 8,
+          alpha: 1,
+          life: 3.8 + Math.random() * 1.4
+        });
+      }
+    }
+
     function checkMilestones() {
+      if (state.score >= 10 && !state.did10Bigfoot) {
+        state.did10Bigfoot = true;
+        spawnBigfoot();
+      }
+
       if (state.score >= 25 && !state.did25Wow) trigger25Wow();
+
+      if (state.score >= 30 && !state.did30FloatingBar) {
+        state.did30FloatingBar = true;
+        state.message = "LOW GRAVITY BAR";
+        state.messageTimer = 1.2;
+      }
+
       if (state.score >= 35 && !state.did35Poops) triggerPoopRain();
 
       if (state.score >= 50 && !state.did50Shrink) {
@@ -665,6 +740,31 @@
         state.infernoMode = true;
         state.message = "INFERNO";
         state.messageTimer = 1.4;
+      }
+
+      if (state.score >= 67 && !state.did67Invert) {
+        state.did67Invert = true;
+        document.body.classList.add("inverted");
+        state.message = "INVERTED";
+        state.messageTimer = 1.2;
+      }
+
+      if (state.score >= 80 && !state.did80Flip) {
+        state.did80Flip = true;
+        canvas.classList.add("upsideDown");
+        state.message = "UPSIDE DOWN";
+        state.messageTimer = 1.2;
+      }
+
+      if (state.score >= 85 && !state.did85Unflip) {
+        state.did85Unflip = true;
+        canvas.classList.remove("upsideDown");
+        state.message = "RIGHT SIDE UP";
+        state.messageTimer = 1.2;
+      }
+
+      if (state.score >= 90 && !state.did90SkyBalls) {
+        triggerSkyBallRain();
       }
     }
 
@@ -711,6 +811,19 @@
 
       paddle.velocity = clamp(paddle.velocity, -paddle.maxSpeed, paddle.maxSpeed);
       paddle.x += paddle.velocity * dt;
+
+      if (state.did30FloatingBar) {
+        const bottomY = H * .83;
+        const topY = H * .48;
+
+        // The bar slowly floats upward after 30 points.
+        paddle.y -= 16 * dt;
+
+        // Hold ArrowDown / S to push it back toward the bottom.
+        if (keys.down) paddle.y += 185 * dt;
+
+        paddle.y = clamp(paddle.y, topY, bottomY);
+      }
 
       if (paddle.x < paddle.w / 2) {
         paddle.x = paddle.w / 2;
@@ -1026,9 +1139,49 @@
       askForScoreSubmit();
     }
 
+
+    function updateBigfoots(dt) {
+      for (const bigfoot of bigfoots) {
+        bigfoot.x += bigfoot.vx * dt;
+        bigfoot.run += dt * 11;
+        if (bigfoot.x < -160 || bigfoot.x > W + 160) {
+          bigfoot.alpha -= dt * 2;
+        }
+      }
+
+      bigfoots = bigfoots.filter(bigfoot => bigfoot.alpha > 0);
+    }
+
+    function updateSkyBalls(dt) {
+      for (const skyBall of skyBalls) {
+        skyBall.life -= dt;
+        skyBall.vy += 820 * dt;
+        skyBall.x += skyBall.vx * dt;
+        skyBall.y += skyBall.vy * dt;
+        skyBall.spin += skyBall.spinVelocity * dt;
+
+        if (skyBall.y + skyBall.r > paddle.y - paddle.h / 2 &&
+            skyBall.x > paddle.x - paddle.w / 2 &&
+            skyBall.x < paddle.x + paddle.w / 2 &&
+            skyBall.vy > 0) {
+          skyBall.y = paddle.y - paddle.h / 2 - skyBall.r;
+          skyBall.vy *= -0.38;
+          skyBall.vx += paddle.velocity * .18;
+        }
+
+        if (skyBall.y > H + 100 || skyBall.life <= 0) {
+          skyBall.alpha -= dt * 1.2;
+        }
+      }
+
+      skyBalls = skyBalls.filter(skyBall => skyBall.alpha > 0);
+    }
+
     function update(dt) {
       updatePoops(dt);
       updateEggplants(dt);
+      updateBigfoots(dt);
+      updateSkyBalls(dt);
       updateTrollHeads(dt);
       updateSmoke(dt);
       updateTargetPieces(dt);
@@ -1398,6 +1551,101 @@
       ctx.closePath();
     }
 
+
+    function drawBigfoot(bigfoot) {
+      const t = bigfoot.run;
+      const s = bigfoot.scale;
+      const legSwing = Math.sin(t) * 18;
+      const armSwing = Math.sin(t + Math.PI) * 20;
+
+      ctx.save();
+      ctx.globalAlpha = bigfoot.alpha;
+      ctx.translate(bigfoot.x, bigfoot.y);
+      ctx.scale(bigfoot.facing * s, s);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#17120d";
+      ctx.fillStyle = "#17120d";
+
+      // Hairy body.
+      ctx.beginPath();
+      ctx.ellipse(0, -44, 22, 39, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Head.
+      ctx.beginPath();
+      ctx.arc(0, -92, 19, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lumpy bigfoot brow.
+      ctx.beginPath();
+      ctx.ellipse(2, -99, 23, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Arms.
+      ctx.lineWidth = 12;
+      ctx.beginPath();
+      ctx.moveTo(-17, -62);
+      ctx.lineTo(-42, -30 + armSwing);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(18, -62);
+      ctx.lineTo(43, -31 - armSwing);
+      ctx.stroke();
+
+      // Legs.
+      ctx.lineWidth = 13;
+      ctx.beginPath();
+      ctx.moveTo(-10, -12);
+      ctx.lineTo(-24, 31 + legSwing);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(11, -12);
+      ctx.lineTo(26, 31 - legSwing);
+      ctx.stroke();
+
+      // Feet.
+      ctx.lineWidth = 9;
+      ctx.beginPath();
+      ctx.moveTo(-24, 31 + legSwing);
+      ctx.lineTo(-45, 34 + legSwing);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(26, 31 - legSwing);
+      ctx.lineTo(47, 35 - legSwing);
+      ctx.stroke();
+
+      // Eyes.
+      ctx.fillStyle = "#f6f1d8";
+      ctx.beginPath();
+      ctx.arc(-7, -94, 2.4, 0, Math.PI * 2);
+      ctx.arc(7, -94, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function drawSkyBall(skyBall) {
+      ctx.save();
+      ctx.globalAlpha = skyBall.alpha;
+      ctx.translate(skyBall.x, skyBall.y);
+      ctx.rotate(skyBall.spin);
+
+      if (beachBallImg.complete && beachBallImg.naturalWidth > 0) {
+        ctx.drawImage(beachBallImg, -skyBall.r, -skyBall.r, skyBall.r * 2, skyBall.r * 2);
+      } else {
+        ctx.fillStyle = "#ddd";
+        ctx.beginPath();
+        ctx.arc(0, 0, skyBall.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
     function drawEggplants() {
       for (const eggplant of eggplants) {
         ctx.save();
@@ -1548,10 +1796,14 @@
       for (const target of targets) drawTarget(target);
       drawTargetPieces();
 
+      for (const skyBall of skyBalls) drawSkyBall(skyBall);
+
       for (const ball of balls) {
         if (state.fireMode) drawFireball(ball);
         else drawBeachBall(ball);
       }
+
+      for (const bigfoot of bigfoots) drawBigfoot(bigfoot);
 
       drawGlowingGreenBar();
 
@@ -1582,6 +1834,7 @@
     window.addEventListener("keydown", event => {
       if (event.code === "ArrowLeft" || event.code === "KeyA") keys.left = true;
       if (event.code === "ArrowRight" || event.code === "KeyD") keys.right = true;
+      if (event.code === "ArrowDown" || event.code === "KeyS") keys.down = true;
 
       if (event.code === "Space") {
         event.preventDefault();
@@ -1592,6 +1845,7 @@
     window.addEventListener("keyup", event => {
       if (event.code === "ArrowLeft" || event.code === "KeyA") keys.left = false;
       if (event.code === "ArrowRight" || event.code === "KeyD") keys.right = false;
+      if (event.code === "ArrowDown" || event.code === "KeyS") keys.down = false;
     });
 
     window.addEventListener("pointerdown", event => {

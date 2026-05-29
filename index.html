@@ -103,7 +103,7 @@
       background: #071007;
       color: #39ff14;
       border: 1px solid rgba(57, 255, 20, .72);
-      font: 900 11px "Courier New", monospace;
+      font: 900 10px "Courier New", monospace;
       cursor: pointer;
       padding: 3px 0;
       box-shadow: inset 0 0 8px rgba(57, 255, 20, .14);
@@ -145,8 +145,8 @@
       left: 50%;
       top: 45%;
       transform: translate(-50%, -50%) scale(1);
-      max-width: 68vw;
-      max-height: 58vh;
+      max-width: 92vw;
+      max-height: 82vh;
       opacity: 0;
       pointer-events: none;
       z-index: 1;
@@ -155,8 +155,8 @@
     }
 
     #gifBurst.show {
-      opacity: .72;
-      transform: translate(-50%, -50%) scale(1.05);
+      opacity: .86;
+      transform: translate(-50%, -50%) scale(1.22);
     }
 
     #trollPriceWidget {
@@ -222,6 +222,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     <div id="musicControls">
       <button id="musicPrev" type="button">⏮</button>
       <button id="musicPlay" type="button">▶</button>
+      <button id="musicPause" type="button">⏸</button>
       <button id="musicNext" type="button">⏭</button>
     </div>
   </div>
@@ -256,6 +257,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     const musicTrackName = document.getElementById("musicTrackName");
     const musicPrev = document.getElementById("musicPrev");
     const musicPlay = document.getElementById("musicPlay");
+    const musicPause = document.getElementById("musicPause");
     const musicNext = document.getElementById("musicNext");
 
     /*
@@ -263,11 +265,17 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       Upload these MP3 files to the same GitHub folder as index.html.
       The first track is theme.mp3 and the game will try to autoplay it.
       Add more MP3 filenames here whenever you want:
-      const MUSIC_FILES = ["theme.mp3", "track2.mp3", "track3.mp3"];
-    */
-    const MUSIC_FILES = ["theme.mp3","lennox.mp3","photo.mp3"];
+      const MUSIC_FILES = ["theme.mp3", "lennox.mp3", "photo.mp3"];
     let currentTrackIndex = 0;
     let musicStarted = false;
+    let userPausedMusic = false;
+
+    function updateMusicButtons() {
+      if (!musicAudio) return;
+
+      if (musicPlay) musicPlay.textContent = musicAudio.paused ? "▶" : "▶";
+      if (musicPause) musicPause.textContent = "⏸";
+    }
 
     function loadMusicTrack(index, shouldPlay = false) {
       if (!musicAudio || !MUSIC_FILES.length) return;
@@ -277,61 +285,74 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       musicAudio.src = file;
       musicAudio.loop = MUSIC_FILES.length === 1;
-      musicAudio.volume = 0.62;
+      musicAudio.volume = 0.72;
+      musicAudio.muted = false;
+      musicAudio.autoplay = true;
+      musicAudio.playsInline = true;
 
       if (musicTrackName) musicTrackName.textContent = file;
 
-      if (shouldPlay) {
-        musicAudio.play()
-          .then(() => {
-            musicStarted = true;
-            if (musicPlay) musicPlay.textContent = "⏸";
-          })
-          .catch(() => {
-            if (musicPlay) musicPlay.textContent = "▶";
-          });
-      }
+      if (shouldPlay && !userPausedMusic) playMusic();
+      updateMusicButtons();
     }
 
     function playMusic() {
       if (!musicAudio) return;
+
+      userPausedMusic = false;
+      musicAudio.muted = false;
       musicAudio.play()
         .then(() => {
           musicStarted = true;
-          if (musicPlay) musicPlay.textContent = "⏸";
+          updateMusicButtons();
         })
         .catch(() => {
-          if (musicPlay) musicPlay.textContent = "▶";
+          // Browsers, especially mobile Safari/Chrome, may block autoplay
+          // until the player taps, presses a key, or starts the game.
+          updateMusicButtons();
         });
     }
 
     function pauseMusic() {
       if (!musicAudio) return;
-      musicAudio.pause();
-      if (musicPlay) musicPlay.textContent = "▶";
-    }
 
-    function toggleMusic() {
-      if (!musicAudio) return;
-      if (musicAudio.paused) playMusic();
-      else pauseMusic();
+      userPausedMusic = true;
+      musicAudio.pause();
+      updateMusicButtons();
     }
 
     function nextMusicTrack() {
+      userPausedMusic = false;
       loadMusicTrack(currentTrackIndex + 1, true);
     }
 
     function previousMusicTrack() {
+      userPausedMusic = false;
       loadMusicTrack(currentTrackIndex - 1, true);
     }
 
-    if (musicPlay) musicPlay.addEventListener("click", toggleMusic);
+    function startMusicForGame() {
+      if (!musicAudio || userPausedMusic) return;
+      if (musicAudio.paused) playMusic();
+    }
+
+    if (musicPlay) musicPlay.addEventListener("click", playMusic);
+    if (musicPause) musicPause.addEventListener("click", pauseMusic);
     if (musicNext) musicNext.addEventListener("click", nextMusicTrack);
     if (musicPrev) musicPrev.addEventListener("click", previousMusicTrack);
 
     if (musicAudio) {
       musicAudio.addEventListener("ended", nextMusicTrack);
+
+      // Load and try to start theme.mp3 automatically in the background.
       loadMusicTrack(0, true);
+
+      // Desktop browsers may allow this; mobile browsers often wait for interaction.
+      window.addEventListener("load", () => {
+        setTimeout(() => startMusicForGame(), 150);
+        setTimeout(() => startMusicForGame(), 850);
+      });
+    });
     }
 
 
@@ -1272,11 +1293,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     }
 
     function checkMilestones() {
-      if (state.score >= 10 && !state.did10Bigfoot) {
-        state.did10Bigfoot = true;
-        spawnBigfoot();
-      }
-
       if (state.score >= 25 && !state.did25Wow) trigger25Wow();
 
       if (state.score >= 30 && !state.did30FloatingBar) {
@@ -1637,6 +1653,36 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       gameOverLetters = gameOverLetters.filter(letter => letter.alpha > 0 && letter.y < H + 180);
     }
 
+
+    function ballDestroyBombs(ball) {
+      if (!state.running || ball.vy >= -80) return;
+
+      for (const bomb of [...bombs]) {
+        const dx = ball.x - bomb.x;
+        const dy = ball.y - bomb.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const bombRadius = bomb.size * .46;
+
+        if (distance < ball.r + bombRadius) {
+          explodeBomb(bomb);
+          bombs = bombs.filter(item => item !== bomb);
+
+          ball.vy *= .82;
+          ball.vx += (dx / Math.max(1, distance)) * 120;
+          barGlow = Math.max(barGlow, 1.8);
+
+          popTexts.push({
+            text: "BOMB BLOCK!",
+            x: bomb.x,
+            y: bomb.y,
+            vy: -46,
+            life: .75,
+            alpha: 1
+          });
+        }
+      }
+    }
+
     function updateBall(ball, dt) {
       ball.vy += state.gravity * dt;
       ball.x += ball.vx * dt;
@@ -1667,6 +1713,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         ball.redGlitch *= Math.pow(.88, dt * 60);
         ball.glitchShake *= Math.pow(.82, dt * 60);
       }
+
+      ballDestroyBombs(ball);
 
       for (const target of targets) touchTarget(ball, target);
 
@@ -1863,7 +1911,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     function update(dt) {
       updatePoops(dt);
       updateEggplants(dt);
-      updateBigfoots(dt);
       updateSkyBalls(dt);
       updateTrollHeads(dt);
       updateGlitchParticles(dt);
@@ -2628,8 +2675,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         else drawBeachBall(ball);
       }
 
-      for (const bigfoot of bigfoots) drawBigfoot(bigfoot);
-
       drawGlowingGreenBar();
       drawBombBits();
 
@@ -2660,11 +2705,12 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     window.addEventListener("resize", sizeCanvas);
 
     window.addEventListener("keydown", event => {
+      startMusicForGame();
       if (event.code === "ArrowLeft" || event.code === "KeyA") keys.left = true;
       if (event.code === "ArrowRight" || event.code === "KeyD") keys.right = true;
       if (event.code === "ArrowDown" || event.code === "KeyS") keys.down = true;
 
-      if (!musicStarted && musicAudio && musicAudio.paused) playMusic();
+      startMusicForGame();
 
       if (event.code === "Space") {
         event.preventDefault();
@@ -2679,7 +2725,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     });
 
     window.addEventListener("pointerdown", event => {
-      if (!musicStarted && musicAudio && musicAudio.paused) playMusic();
+      startMusicForGame();
       if (!state.running) resetGame();
       paddle.targetX = event.clientX;
     });

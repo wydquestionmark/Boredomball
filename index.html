@@ -199,7 +199,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
   <div id="mutePrompt">Press M to mute</div>
-  <div id="versionLabel">trollball ver 10.68</div>
+  <div id="versionLabel">trollball ver 11.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -530,6 +530,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     let bombs = [];
     let bombBits = [];
     let miniBeachBalls = [];
+    let glowingTrollHeads = [];
 
     const keys = { left: false, right: false, down: false, up: false };
 
@@ -580,8 +581,10 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       visitorCount: 0,
       gifTimer: 0,
-      nextBombTimer: 1.4,
+      nextBombTimer: 2.8,
       bombSpeedToggle: false,
+      nextGlowingTrollTimer: 7.5,
+      shrinkBarTimer: 0,
       nextMiniBeachBallScore: 26
     };
 
@@ -697,7 +700,9 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const baseWidth = Math.max(180, Math.min(340, W * .30));
-      paddle.w = state.did50Shrink ? baseWidth * (2 / 3) : baseWidth;
+      let currentPaddleWidth = state.did50Shrink ? baseWidth * (2 / 3) : baseWidth;
+      if (state.shrinkBarTimer > 0) currentPaddleWidth = baseWidth * (1 / 8);
+      paddle.w = currentPaddleWidth;
       paddle.h = Math.max(10, Math.min(16, H * .014));
       paddle.y = H * .83;
       paddle.x = clamp(paddle.x || W / 2, paddle.w / 2, W - paddle.w / 2);
@@ -797,8 +802,10 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       state.infernoMode = false;
 
       state.gifTimer = 0;
-      state.nextBombTimer = 1.4;
+      state.nextBombTimer = 2.8;
       state.bombSpeedToggle = false;
+      state.nextGlowingTrollTimer = 7.5 + Math.random() * 5.5;
+      state.shrinkBarTimer = 0;
       state.nextMiniBeachBallScore = 26;
       gifBurst.classList.remove("show");
       gifBurst.removeAttribute("src");
@@ -825,6 +832,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       bombs = [];
       bombBits = [];
       miniBeachBalls = [];
+      glowingTrollHeads = [];
       bigfoots = [];
       skyBalls = [];
       glitchParticles = [];
@@ -911,6 +919,69 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     }
 
 
+
+    function spawnGlowingTrollHead() {
+      if (!state.running || state.score < 8) return;
+
+      const size = 24 + Math.random() * 20;
+
+      glowingTrollHeads.push({
+        x: 30 + Math.random() * Math.max(1, W - 60),
+        y: -size - Math.random() * 220,
+        vx: (Math.random() - .5) * 70,
+        vy: 95 + Math.random() * 150 + Math.min(150, state.score * 2.2),
+        size,
+        rotation: (Math.random() - .5) * .55,
+        rotationSpeed: (Math.random() - .5) * 2.6,
+        alpha: 1,
+        pulse: Math.random() * Math.PI * 2
+      });
+
+      state.nextGlowingTrollTimer = 8.5 + Math.random() * 7.5;
+    }
+
+    function activateShrunkenBar() {
+      state.shrinkBarTimer = 5;
+      barGlow = 3.2;
+      state.message = "BAR SHRINK!";
+      state.messageTimer = 1.0;
+      sizeCanvas();
+    }
+
+    function updateGlowingTrollHeads(dt) {
+      if (state.running) {
+        state.nextGlowingTrollTimer -= dt;
+        if (state.nextGlowingTrollTimer <= 0) spawnGlowingTrollHead();
+      }
+
+      for (const head of glowingTrollHeads) {
+        head.pulse += dt * 5;
+        head.x += (head.vx + Math.sin(head.pulse) * 18) * dt;
+        head.y += head.vy * dt;
+        head.vy += 70 * dt;
+        head.rotation += head.rotationSpeed * dt;
+
+        const paddleTop = paddle.y - paddle.h / 2;
+        const hitsBar =
+          state.running &&
+          head.y + head.size * .35 >= paddleTop &&
+          head.y - head.size * .25 <= paddle.y + paddle.h &&
+          head.x > paddle.x - paddle.w / 2 - head.size * .35 &&
+          head.x < paddle.x + paddle.w / 2 + head.size * .35;
+
+        if (hitsBar) {
+          activateShrunkenBar();
+          head.alpha = 0;
+        }
+
+        if (head.y > H + 80) {
+          head.alpha -= dt * 1.4;
+        }
+      }
+
+      glowingTrollHeads = glowingTrollHeads.filter(head => head.alpha > 0);
+    }
+
     function spawnBomb() {
       const scoreSpeed = Math.min(520, Math.max(0, state.score - 10) * 6.5);
       const baseSpeed = state.bombSpeedToggle ? 165 : 230;
@@ -930,8 +1001,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       });
 
       // Less frequent than before, but still speeds up gradually as the score rises.
-      const fasterGame = Math.max(1.25, 3.4 - Math.max(0, state.score - 10) * .018);
-      state.nextBombTimer = fasterGame + Math.random() * 2.2;
+      const fasterGame = Math.max(2.4, 5.8 - Math.max(0, state.score - 10) * .012);
+      state.nextBombTimer = fasterGame + Math.random() * 3.2;
     }
 
     function explodeBomb(bomb) {
@@ -971,7 +1042,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         state.nextBombTimer -= dt;
         if (state.nextBombTimer <= 0) spawnBomb();
       } else if (state.running && state.score < 10) {
-        state.nextBombTimer = 1.8;
+        state.nextBombTimer = 3.8;
       }
 
       for (const bomb of bombs) {
@@ -1979,6 +2050,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       updateBombs(dt);
       updateBombBits(dt);
       updateMiniBeachBalls(dt);
+      updateGlowingTrollHeads(dt);
       updateBatteryEmojis(dt);
 
       if (gameOverGlowTimer > 0) {
@@ -1986,6 +2058,16 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         if (gameOverGlowTimer <= 0 && gameOverGlowText) {
           spawnGameOverExplosion(gameOverGlowText);
           gameOverGlowText = "";
+        }
+      }
+
+      if (state.shrinkBarTimer > 0) {
+        state.shrinkBarTimer -= dt;
+        if (state.shrinkBarTimer <= 0) {
+          state.shrinkBarTimer = 0;
+          sizeCanvas();
+        } else {
+          sizeCanvas();
         }
       }
 
@@ -2447,6 +2529,59 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
 
 
+
+    function drawGlowingTrollHeads() {
+      for (const head of glowingTrollHeads) {
+        const width = head.size * 1.8;
+        const height = width * .74;
+        const glow = .65 + Math.sin(head.pulse) * .25;
+
+        ctx.save();
+        ctx.globalAlpha = head.alpha;
+        ctx.translate(head.x, head.y);
+        ctx.rotate(head.rotation);
+
+        ctx.shadowBlur = head.size * 1.4;
+        ctx.shadowColor = `rgba(57,255,20,${glow})`;
+
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = `rgba(57,255,20,${.20 + glow * .20})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, head.size * 1.05, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalCompositeOperation = "source-over";
+
+        if (trollImg.complete && trollImg.naturalWidth > 0) {
+          ctx.drawImage(trollImg, -width / 2, -height / 2, width, height);
+        } else {
+          ctx.fillStyle = "#39ff14";
+          ctx.beginPath();
+          ctx.arc(0, 0, head.size * .55, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    function drawShrinkCountdown() {
+      if (state.shrinkBarTimer <= 0) return;
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(57,255,20,.95)";
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = "rgba(57,255,20,.9)";
+      ctx.font = `900 ${Math.min(W * .12, 70)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(Math.ceil(state.shrinkBarTimer), W / 2, H * .23);
+
+      ctx.font = `900 ${Math.min(W * .045, 26)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText("SHRUNKEN BAR", W / 2, H * .30);
+      ctx.restore();
+    }
+
     function drawMiniBeachBall(mini) {
       ctx.save();
       ctx.globalAlpha = mini.alpha;
@@ -2724,6 +2859,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       drawTargetPieces();
 
       drawBombs();
+      drawGlowingTrollHeads();
 
       for (const skyBall of skyBalls) drawSkyBall(skyBall);
       drawMiniBeachBalls();

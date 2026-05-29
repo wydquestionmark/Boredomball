@@ -70,6 +70,30 @@
       to { transform: translateX(-100%); }
     }
 
+    #mutePrompt {
+      position: fixed;
+      left: 50%;
+      bottom: 72px;
+      transform: translateX(-50%);
+      z-index: 24;
+      color: rgba(57, 255, 20, .92);
+      background: rgba(0, 0, 0, .78);
+      border: 1px solid rgba(57, 255, 20, .58);
+      padding: 5px 10px;
+      font: 900 13px "Courier New", monospace;
+      letter-spacing: .06em;
+      text-shadow:
+        0 0 4px rgba(57, 255, 20, .9),
+        0 0 10px rgba(57, 255, 20, .35);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .25s ease;
+    }
+
+    #mutePrompt.show {
+      opacity: 1;
+    }
+
     #versionLabel {
       position: fixed;
       right: 10px;
@@ -174,7 +198,8 @@ There's vomit on his sweater already, mom's spaghetti
 He's nervous, but on the surface, he looks calm and ready //" </div>
   </div>
   <audio id="musicAudio" preload="auto"></audio>
-  <div id="versionLabel">trollball ver 6.68</div>
+  <div id="mutePrompt">Press M to mute</div>
+  <div id="versionLabel">trollball ver 7.68</div>
   <div id="hint">USE ARROW KEYS OR DRAG TO CONTROL THE BAR</div>
 
   <script type="module">
@@ -209,10 +234,35 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
 
     const musicAudio = document.getElementById("musicAudio");
+    const mutePrompt = document.getElementById("mutePrompt");
 
-    const MUSIC_FILES = ["theme.mp3", "lennox.mp3", "photo.mp3"];
+    const MUSIC_FILES = ["Theme.mp3", "lennox.mp3", "photo.mp3"];
     let currentTrackIndex = 0;
     let musicEnabledForRound = false;
+    let musicMuted = false;
+    let mutePromptTimer = 0;
+
+    function showMutePrompt() {
+      if (!mutePrompt) return;
+
+      mutePrompt.textContent = musicMuted ? "Music muted — Press M to unmute" : "Press M to mute";
+      mutePrompt.classList.add("show");
+      mutePromptTimer = 3.2;
+    }
+
+    function toggleMusicMute() {
+      musicMuted = !musicMuted;
+
+      if (musicAudio) {
+        musicAudio.muted = musicMuted;
+      }
+
+      if (mutePrompt) {
+        mutePrompt.textContent = musicMuted ? "Music muted — Press M to unmute" : "Press M to mute";
+        mutePrompt.classList.add("show");
+        mutePromptTimer = 2.2;
+      }
+    }
 
     function loadMusicTrack(index) {
       if (!musicAudio || !MUSIC_FILES.length) return;
@@ -236,8 +286,9 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       if (!musicAudio.src) loadMusicTrack(currentTrackIndex);
 
-      musicAudio.muted = false;
+      musicAudio.muted = musicMuted;
       musicAudio.volume = 0.78;
+      showMutePrompt();
 
       const attempt = musicAudio.play();
       if (attempt && typeof attempt.catch === "function") {
@@ -253,6 +304,8 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       musicEnabledForRound = false;
       musicAudio.pause();
       musicAudio.currentTime = 0;
+      if (mutePrompt) mutePrompt.classList.remove("show");
+      mutePromptTimer = 0;
     }
 
     function playNextRoundTrack() {
@@ -316,7 +369,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       setTrollPriceStatus("$--", "24h: loading");
 
       try {
-        const tokenUrl = `https://api.dexscreener.com/latest/dex/tokens/${5UUH9RTDiSpq6HKS6bp4NdU9PNJpXRXuiw6ShBTBhgH2}`;
+        const tokenUrl = `https://api.dexscreener.com/latest/dex/tokens/${TROLL_TOKEN_ADDRESS}`;
         let data = await fetchDexscreenerJson(tokenUrl);
         let pairs = Array.isArray(data.pairs) ? data.pairs : [];
 
@@ -1860,6 +1913,13 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     }
 
     function update(dt) {
+      if (mutePromptTimer > 0) {
+        mutePromptTimer -= dt;
+        if (mutePromptTimer <= 0 && mutePrompt) {
+          mutePrompt.classList.remove("show");
+        }
+      }
+
       updatePoops(dt);
       updateEggplants(dt);
       updateSkyBalls(dt);
@@ -2660,6 +2720,11 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       if (event.code === "ArrowRight" || event.code === "KeyD") keys.right = true;
       if (event.code === "ArrowDown" || event.code === "KeyS") keys.down = true;
       if (event.code === "ArrowUp" || event.code === "KeyW") keys.up = true;
+
+      if (event.code === "KeyM") {
+        event.preventDefault();
+        toggleMusicMute();
+      }
 
       if (event.code === "Space") {
         event.preventDefault();

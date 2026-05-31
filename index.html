@@ -518,6 +518,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     let smokePuffs = [];
     let trollHeads = [];
     let tinyGlowingTrollHeads = [];
+    let rainbowPowerUps = [];
     let bigfoots = [];
     let skyBalls = [];
     let glitchParticles = [];
@@ -585,7 +586,11 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       bombSpeedToggle: false,
       nextMiniBeachBallScore: 26,
       nextTinyTrollTimer: 2.4,
-      tinyTrollShrinkTimer: 0
+      tinyTrollShrinkTimer: 0,
+      tinyTrollShrinkHitsRemaining: 0,
+      nextRainbowPowerTimer: 1.2,
+      rainbowModeTimer: 0,
+      rainbowBonusBallTimer: 0
     };
 
     try {
@@ -694,7 +699,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
     function currentPaddleWidth() {
       const milestoneShrink = state.did50Shrink ? (2 / 3) : 1;
-      const tinyTrollShrink = state.tinyTrollShrinkTimer > 0 ? (1 / 8) : 1;
+      const tinyTrollShrink = state.tinyTrollShrinkHitsRemaining > 0 ? (1 / 8) : 1;
       return basePaddleWidth() * milestoneShrink * tinyTrollShrink;
     }
 
@@ -818,6 +823,10 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       state.nextMiniBeachBallScore = 26;
       state.nextTinyTrollTimer = 2.4;
       state.tinyTrollShrinkTimer = 0;
+      state.tinyTrollShrinkHitsRemaining = 0;
+      state.nextRainbowPowerTimer = 1.2;
+      state.rainbowModeTimer = 0;
+      state.rainbowBonusBallTimer = 0;
       gifBurst.classList.remove("show");
       gifBurst.removeAttribute("src");
       document.body.classList.remove("inverted");
@@ -841,6 +850,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       smokePuffs = [];
       trollHeads = [];
       tinyGlowingTrollHeads = [];
+      rainbowPowerUps = [];
       bombs = [];
       bombBits = [];
       miniBeachBalls = [];
@@ -1006,7 +1016,13 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
           bomb.x < paddle.x + paddle.w / 2 + bomb.size * .25;
 
         if (hitsBar && state.running) {
-          triggerBombGameOver(bomb);
+          if (state.rainbowModeTimer > 0) {
+            explodeBomb(bomb);
+            bomb.alpha = 0;
+            barGlow = Math.max(barGlow, 3.2);
+          } else {
+            triggerBombGameOver(bomb);
+          }
         }
       }
 
@@ -1634,11 +1650,25 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       head.hit = true;
       head.alpha = 0;
-      state.tinyTrollShrinkTimer = 5;
+      state.tinyTrollShrinkTimer = 0;
+      state.tinyTrollShrinkHitsRemaining = 1;
       applyPaddleWidth();
       barGlow = Math.max(barGlow, 2.8);
       state.message = "TINY TROLL CURSE";
       state.messageTimer = 1.1;
+    }
+
+    function clearTinyTrollShrinkAfterBallHit() {
+      if (state.tinyTrollShrinkHitsRemaining <= 0) return;
+
+      state.tinyTrollShrinkHitsRemaining -= 1;
+      if (state.tinyTrollShrinkHitsRemaining <= 0) {
+        state.tinyTrollShrinkHitsRemaining = 0;
+        state.tinyTrollShrinkTimer = 0;
+        applyPaddleWidth();
+        state.message = "BAR RESTORED";
+        state.messageTimer = .8;
+      }
     }
 
     function updateTinyGlowingTrollHeads(dt) {
@@ -1650,17 +1680,6 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
         }
       }
 
-      if (state.tinyTrollShrinkTimer > 0) {
-        state.tinyTrollShrinkTimer -= dt;
-        if (state.tinyTrollShrinkTimer <= 0) {
-          state.tinyTrollShrinkTimer = 0;
-          applyPaddleWidth();
-          state.message = "BAR RESTORED";
-          state.messageTimer = .8;
-        } else {
-          applyPaddleWidth();
-        }
-      }
 
       for (const head of tinyGlowingTrollHeads) {
         head.wobble += dt * 3.2;
@@ -1684,6 +1703,105 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       }
 
       tinyGlowingTrollHeads = tinyGlowingTrollHeads.filter(head => head.alpha > 0);
+    }
+
+
+    function spawnRainbowPowerUp() {
+      const size = Math.max(34, Math.min(58, W * (.07 + Math.random() * .025)));
+      const fromLeft = Math.random() > .25;
+
+      rainbowPowerUps.push({
+        x: fromLeft ? -size : Math.random() * W * .45,
+        y: -size - Math.random() * 220,
+        vx: 42 + Math.random() * 76,
+        vy: 32 + Math.random() * 58,
+        size,
+        rotation: (Math.random() - .5) * .5,
+        rotationSpeed: (Math.random() - .5) * 1.6,
+        alpha: 1,
+        wobble: Math.random() * Math.PI * 2,
+        hit: false
+      });
+    }
+
+    function createRainbowBonusBall() {
+      const ball = createBall(45 + Math.random() * Math.max(1, W - 90), -40 - Math.random() * 120);
+      ball.r = Math.max(22, Math.min(42, W * (.034 + Math.random() * .018)));
+      ball.vx = (Math.random() - .5) * 520;
+      ball.vy = 90 + Math.random() * 210;
+      ball.rainbowBonus = true;
+      ball.life = 5.6;
+      return ball;
+    }
+
+    function triggerRainbowMode(power) {
+      if (power.hit) return;
+
+      power.hit = true;
+      power.alpha = 0;
+      state.rainbowModeTimer = 5;
+      state.rainbowBonusBallTimer = 0;
+      barGlow = Math.max(barGlow, 4.2);
+      state.message = "RAINBOW INVINCIBLE";
+      state.messageTimer = 1.2;
+
+      for (let i = 0; i < 5; i++) {
+        balls.push(createRainbowBonusBall());
+      }
+    }
+
+    function updateRainbowPowerUps(dt) {
+      if (state.running && state.score >= 5 && state.rainbowModeTimer <= 0) {
+        state.nextRainbowPowerTimer -= dt;
+        if (state.nextRainbowPowerTimer <= 0) {
+          spawnRainbowPowerUp();
+          state.nextRainbowPowerTimer = 6.5 + Math.random() * 8.5;
+        }
+      }
+
+      if (state.rainbowModeTimer > 0) {
+        state.rainbowModeTimer -= dt;
+        state.rainbowBonusBallTimer -= dt;
+
+        if (state.running && state.rainbowBonusBallTimer <= 0) {
+          balls.push(createRainbowBonusBall());
+          state.rainbowBonusBallTimer = .45 + Math.random() * .28;
+        }
+
+        if (state.rainbowModeTimer <= 0) {
+          state.rainbowModeTimer = 0;
+          state.rainbowBonusBallTimer = 0;
+          balls = balls.filter(ball => !ball.rainbowBonus);
+          state.message = "NORMAL MODE";
+          state.messageTimer = .75;
+        }
+      }
+
+      for (const power of rainbowPowerUps) {
+        power.wobble += dt * 2.6;
+        power.x += (power.vx + Math.sin(power.wobble) * 38) * dt;
+        power.y += (power.vy + Math.cos(power.wobble * 1.7) * 18) * dt;
+        power.rotation += power.rotationSpeed * dt;
+
+        const paddleTop = paddle.y - paddle.h / 2;
+        const hitsBar =
+          state.running &&
+          !power.hit &&
+          power.y + power.size * .55 >= paddleTop &&
+          power.y - power.size * .35 <= paddle.y + paddle.h &&
+          power.x > paddle.x - paddle.w / 2 - power.size * .45 &&
+          power.x < paddle.x + paddle.w / 2 + power.size * .45;
+
+        if (hitsBar) triggerRainbowMode(power);
+
+        if (power.y > H + 120 || power.x > W + power.size * 2) power.alpha -= dt * .75;
+      }
+
+      rainbowPowerUps = rainbowPowerUps.filter(power => power.alpha > 0);
+
+      for (const ball of balls) {
+        if (ball.rainbowBonus) ball.life -= dt;
+      }
     }
 
     function updateTrollHeads(dt) {
@@ -1923,6 +2041,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
         state.targetStreak = 0;
         addScore(1);
+        clearTinyTrollShrinkAfterBallHit();
       }
 
 
@@ -2065,6 +2184,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       updateSkyBalls(dt);
       updateTrollHeads(dt);
       updateTinyGlowingTrollHeads(dt);
+      updateRainbowPowerUps(dt);
       updateGlitchParticles(dt);
       updateSadFaceEmojis(dt);
       updateSmoke(dt);
@@ -2098,7 +2218,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
         for (const ball of balls) updateBall(ball, dt);
 
-        balls = balls.filter(ball => ball.y - ball.r <= H);
+        balls = balls.filter(ball => ball.y - ball.r <= H && (!ball.rainbowBonus || ball.life > 0 || state.rainbowModeTimer > 0));
 
         if (balls.length === 0) triggerGameOver();
       }
@@ -2124,8 +2244,17 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       popTexts = popTexts.filter(pop => pop.life > 0);
     }
 
+    function qualifiesForTopFive(score) {
+      const currentScores = leaderboard
+        .map(entry => Number(entry && entry.score))
+        .filter(scoreValue => Number.isFinite(scoreValue))
+        .sort((a, b) => b - a);
+
+      return currentScores.length < 5 || Number(score) > currentScores[4];
+    }
+
     function askForScoreSubmit() {
-      if (state.scoreSubmitted || state.score <= 0) return;
+      if (state.scoreSubmitted || state.score <= 0 || !qualifiesForTopFive(state.score)) return;
       state.scoreSubmitted = true;
 
       setTimeout(() => {
@@ -2402,6 +2531,31 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       ctx.save();
       ctx.globalAlpha *= batteryBlink;
       ctx.translate(x, y);
+
+      if (state.rainbowModeTimer > 0) {
+        const time = performance.now() * .006;
+        const pulse = 1 + Math.sin(time * 3.4) * .18;
+        ctx.shadowBlur = 34 + Math.sin(time * 5) * 10 + barGlow * 38;
+        ctx.shadowColor = `hsl(${(time * 80) % 360}, 100%, 62%)`;
+
+        const grad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+        for (let i = 0; i <= 6; i++) {
+          grad.addColorStop(i / 6, `hsl(${(time * 95 + i * 60) % 360}, 100%, 55%)`);
+        }
+
+        ctx.fillStyle = grad;
+        roundRect(-w / 2, -h * pulse / 2, w, h * pulse, h);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = "rgba(255,255,255,.55)";
+        roundRect(-w / 2 + 6, -h * .25, w - 12, h * .5, h * .25);
+        ctx.fill();
+
+        ctx.restore();
+        return;
+      }
 
       ctx.shadowBlur = 18 + barGlow * 42;
       ctx.shadowColor = `rgba(0,255,100,${0.72 + Math.min(barGlow, 1) * 0.28})`;
@@ -2730,7 +2884,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
     }
 
     function drawTinyTrollCountdown() {
-      if (state.tinyTrollShrinkTimer <= 0) return;
+      if (state.tinyTrollShrinkHitsRemaining <= 0) return;
 
       ctx.save();
       ctx.textAlign = "center";
@@ -2738,8 +2892,63 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       ctx.fillStyle = "rgba(57,255,20,.96)";
       ctx.shadowBlur = 24;
       ctx.shadowColor = "rgba(57,255,20,.95)";
-      ctx.font = `900 ${Math.min(W * .075, 44)}px Impact, Arial Black, sans-serif`;
-      ctx.fillText(`TINY TROLL BAR: ${Math.ceil(state.tinyTrollShrinkTimer)}`, W / 2, H * .145);
+      ctx.font = `900 ${Math.min(W * .065, 38)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText("TINY TROLL BAR: NEXT HIT", W / 2, H * .145);
+      ctx.restore();
+    }
+
+
+    function drawRainbowPowerUp(power) {
+      const time = performance.now() * .006;
+      const pulse = .86 + Math.sin(time * 4 + power.wobble) * .14;
+      const size = power.size * pulse;
+      const aspect = 0.74;
+
+      ctx.save();
+      ctx.globalAlpha = power.alpha;
+      ctx.translate(power.x, power.y);
+      ctx.rotate(power.rotation + Math.sin(power.wobble) * .12);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowBlur = 34;
+      ctx.shadowColor = `hsl(${(time * 130) % 360}, 100%, 62%)`;
+
+      const grad = ctx.createRadialGradient(0, 0, size * .1, 0, 0, size * .78);
+      grad.addColorStop(0, "rgba(255,255,255,.96)");
+      grad.addColorStop(.22, `hsla(${(time * 120) % 360},100%,65%,.82)`);
+      grad.addColorStop(.52, `hsla(${(time * 120 + 120) % 360},100%,55%,.50)`);
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, size * .88, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = "source-over";
+      ctx.beginPath();
+      ctx.arc(0, 0, size * .52, 0, Math.PI * 2);
+      ctx.clip();
+
+      if (trollImg.complete && trollImg.naturalWidth > 0) {
+        ctx.drawImage(trollImg, -size * .64, -size * .64 * aspect, size * 1.28, size * 1.28 * aspect);
+      } else {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(-size * .42, -size * .30, size * .84, size * .60);
+      }
+
+      ctx.restore();
+    }
+
+    function drawRainbowModeCountdown() {
+      if (state.rainbowModeTimer <= 0) return;
+
+      const time = performance.now() * .006;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = `hsl(${(time * 120) % 360}, 100%, 54%)`;
+      ctx.shadowBlur = 28;
+      ctx.shadowColor = `hsl(${(time * 120 + 90) % 360}, 100%, 62%)`;
+      ctx.font = `900 ${Math.min(W * .07, 42)}px Impact, Arial Black, sans-serif`;
+      ctx.fillText(`RAINBOW MODE: ${Math.ceil(state.rainbowModeTimer)}`, W / 2, H * .205);
       ctx.restore();
     }
 
@@ -2879,6 +3088,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
 
       for (const head of trollHeads) drawTrollHead(head);
       for (const head of tinyGlowingTrollHeads) drawTinyGlowingTrollHead(head);
+      for (const power of rainbowPowerUps) drawRainbowPowerUp(power);
 
       drawEggplants();
       drawPoops();
@@ -2892,6 +3102,7 @@ He's nervous, but on the surface, he looks calm and ready //" </div>
       drawGameOverGlow();
       drawGameOverLetters();
       drawTinyTrollCountdown();
+      drawRainbowModeCountdown();
       drawMessage();
     }
 
